@@ -2,6 +2,9 @@ import os
 import pyaudio
 import threading
 import sys
+import json
+import requests
+from datetime import datetime
 
 from deepgram import (
     DeepgramClient,
@@ -10,11 +13,14 @@ from deepgram import (
 )
 
 #######################
-# Retrieve API key from environment variable
+# Retrieve config from environment variables
 #######################
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 if not DEEPGRAM_API_KEY:
     raise EnvironmentError("Missing environment variable 'DEEPGRAM_API_KEY'.")
+
+# Optionally set your external webhook URL in an environment variable
+WEBHOOK_URL = "https://hook.us2.make.com/w8oj0292s3hcxbdrlvvqnmgkfkv7zzn3"
 
 #######################
 # Microphone Parameters
@@ -23,59 +29,79 @@ CHUNK = 1024           # Number of frames per buffer
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
 RATE = 16000           # Sample rate
-INPUT_DEVICE_INDEX = None  # If you have multiple mics, you can set the device index
+INPUT_DEVICE_INDEX = None  # If you have multiple mics, set the device index
+
+# We'll accumulate transcripts for batch saving
+transcripts = []
 
 def on_transcript(connection, result, **kwargs):
     """
-    Callback for when a new transcript is received from Deepgram in real time.
-    This function expects typed objects, not dictionaries.
+    Callback for when a new transcript is received in real time.
     """
-    # Get the first alternative (this is a ListenWSAlternative, not a dict)
-    alt = result.channel.alternatives[0]
-    
-    # The actual transcript text:
+    alt = result.channel.alternatives[0]  # typed 'ListenWSAlternative'
     transcript = alt.transcript
     if not transcript:
-        return  # If there's no transcript text, skip printing
+        return  # If there's no transcript text, skip
 
-    # 'alt.words' is likely a list of typed word objects (ListenWSWord)
-    words = alt.words  # May be None or an empty list if no words
+    # Diarization support: check if words exist and have a 'speaker' value
+    words = alt.words
     if words and words[0].speaker is not None:
-        # If diarization is enabled, the 'speaker' field indicates the speaker index
         speaker_id = words[0].speaker
         print(f"Speaker {speaker_id}: {transcript}")
+        speaker_str = f"Speaker {speaker_id}"
     else:
-        # No speaker label found; just print the transcript
+        # Fallback if no diarization info
         print(f"Transcript: {transcript}")
+        speaker_str = "Unknown"
+
+    # 1) Accumulate transcripts for batch saving
+    transcripts.append({
+        "speaker": speaker_str,
+        "transcript": transcript,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+
+    # 2) Send to external webhook in real time
+    try:
+        payload = {
+            "speaker": speaker_str,
+            "transcript": transcript,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        # Synchronous POST request. For high volume, consider async or queue.
+        response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Failed to send transcript to webhook: {e}")
 
 def main():
-    # Initialize Deepgram client with your API key
+    # 1) Initialize Deepgram client
     deepgram = DeepgramClient(DEEPGRAM_API_KEY)
 
-    # Create a WebSocket connection object for real-time transcription
+    # 2) Create a WebSocket connection object for real-time transcription
     dg_connection = deepgram.listen.websocket.v("1")
 
-    # Attach a callback for transcription events
+    # 3) Attach a callback for transcription events
     dg_connection.on(LiveTranscriptionEvents.Transcript, on_transcript)
 
-    # Create options for the Deepgram streaming connection
-    # Note `diarize=True` to enable speaker diarization
+    # 4) Create options for the Deepgram streaming connection
+    #    Including diarization
     options = LiveOptions(
-        model="nova-3",      # You can also use 'nova-2', 'general', etc.
+        model="nova-3",      # Or 'nova-2', etc.
         diarize=True,        # Enable speaker diarization
-        encoding="linear16", # PCM linear 16 audio from the microphone
-        sample_rate=RATE,    
-        channels=CHANNELS,   
-        punctuate=True,      # (optional) get punctuation
+        encoding="linear16", # PCM linear 16 from the microphone
+        sample_rate=RATE,
+        channels=CHANNELS,
+        punctuate=True,      # optional punctuation
     )
 
-    # Start the WebSocket connection (synchronously).
+    # 5) Start the WebSocket connection (synchronously). Returns bool.
     started = dg_connection.start(options)
     if not started:
         print("Failed to start Deepgram WebSocket connection.")
         sys.exit(1)
 
-    # Set up PyAudio to read from your microphone
+    # 6) Set up PyAudio to read from your microphone
     p = pyaudio.PyAudio()
     stream = p.open(
         format=FORMAT,
@@ -86,44 +112,46 @@ def main():
         input_device_index=INPUT_DEVICE_INDEX
     )
 
-    # Use a threading.Event to cleanly stop the mic thread
+    # Use a threading.Event to stop the mic thread
     stop_event = threading.Event()
 
     def read_mic():
         """
-        Continuously read data from the microphone in CHUNK-sized buffers
-        and send it to Deepgram for transcription.
+        Continuously read data from the mic and send to Deepgram.
         """
         while not stop_event.is_set():
             data = stream.read(CHUNK, exception_on_overflow=False)
             dg_connection.send(data)
 
-    # Start the thread that reads from the mic
+    # 7) Start the microphone-reading thread
     mic_thread = threading.Thread(target=read_mic)
     mic_thread.start()
 
-    print("Listening... (press Enter to stop)\n")
+    print("Listening... (press Enter or Ctrl+C to stop)\n")
 
-    # Wait for user input to terminate
+    # 8) Wait for user input to terminate
     try:
         input("")
     except KeyboardInterrupt:
-        # The user pressed Ctrl+C
         pass
 
-    # Signal our thread to stop
+    # 9) Signal our mic thread to stop
     stop_event.set()
     mic_thread.join()
 
-    # Tell Deepgram we’re finished sending audio
+    # 10) Notify Deepgram no more audio will be sent
     dg_connection.finish()
 
-    # Clean up the audio stream
+    # 11) Close the audio stream
     stream.stop_stream()
     stream.close()
     p.terminate()
 
-    print("Finished.")
+    # 12) Write transcripts to a JSON file for batch usage
+    with open("transcripts.json", "w", encoding="utf-8") as f:
+        json.dump(transcripts, f, indent=2, ensure_ascii=False)
+
+    print("\nFinished. Check transcripts.json for batch output.\n")
 
 if __name__ == "__main__":
     main()
