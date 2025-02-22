@@ -1,17 +1,42 @@
 [
   {
     "speaker": "Speaker 0",
-    "transcript": "Start doing brand treatment. The last time I went to",
-    "timestamp": "2025-02-22T21:06:29.681761+00:00"
+    "transcript": "Meeting, enhanced general. We should be using meeting for what we're doing here.",
+    "timestamp": "2025-02-22T21:58:57.706426"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Hello. Are you listening?",
-    "timestamp": "2025-02-22T21:06:31.469520+00:00"
+    "transcript": "A microphone.",
+    "timestamp": "2025-02-22T21:58:58.693955"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Yep. It is listening.",
-    "timestamp": "2025-02-22T21:06:33.946734+00:00"
+    "transcript": "But they have general for",
+    "timestamp": "2025-02-22T21:59:00.950596"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "It seems to work.",
+    "timestamp": "2025-02-22T21:59:03.825716"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Yeah. Enhanced works by itself that you can choose options.",
+    "timestamp": "2025-02-22T21:59:08.853372"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "Optimized which includes multiple speakers with a single microphone. That's probably what we should do, isn't it?",
+    "timestamp": "2025-02-22T21:59:11.726699"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Yeah. Finance is multiple speakers of varying audio quality.",
+    "timestamp": "2025-02-22T21:59:15.741492"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "Okay. Let's do that.",
+    "timestamp": "2025-02-22T21:59:18.291206"
   }
 ]

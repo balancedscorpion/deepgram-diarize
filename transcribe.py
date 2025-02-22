@@ -23,12 +23,9 @@ SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
 if not SUPABASE_API_KEY:
     raise EnvironmentError("Missing environment variable 'SUPABASE_API_KEY'.")
 
-PROJECT_ID = os.getenv("PROJECT_ID")
-if not PROJECT_ID:
-    raise EnvironmentError("Missing environment variable 'PROJECT_ID'.")
-
+PROJECT_ID = "mqaiuwpvphctupwtvidm"
 # Construct the Supabase REST URL using the PROJECT_ID
-SUPABASE_URL = f"https://mqaiuwpvphctupwtvidm.supabase.co/rest/v1/conversations"
+SUPABASE_URL = f"https://{PROJECT_ID}.supabase.co/rest/v1/conversations"
 
 #######################
 # Microphone Parameters
@@ -71,15 +68,17 @@ def on_transcript(connection, result, **kwargs):
 
     # 2) Send to Supabase in real time
     try:
-        payload = {
+        # Supabase expects an array of objects for insertion
+        payload = [{
             "speaker": speaker_str,
             "transcript": transcript,
             "timestamp": datetime.utcnow().isoformat()
-        }
+        }]
         headers = {
             "Content-Type": "application/json",
             "apikey": SUPABASE_API_KEY,
-            "Authorization": f"Bearer {SUPABASE_API_KEY}"
+            "Authorization": f"Bearer {SUPABASE_API_KEY}",
+            "Prefer": "return=minimal"
         }
         response = requests.post(SUPABASE_URL, json=payload, headers=headers, timeout=5)
         response.raise_for_status()
@@ -99,7 +98,7 @@ def main():
     # 4) Create options for the Deepgram streaming connection
     #    Including diarization
     options = LiveOptions(
-        model="nova-3",
+        model="enhanced-meeting",
         diarize=True,        # Enable speaker diarization
         encoding="linear16", # PCM linear 16 from the microphone
         sample_rate=RATE,
