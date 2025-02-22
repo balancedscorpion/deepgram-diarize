@@ -4,7 +4,7 @@ import threading
 import sys
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 from deepgram import (
     DeepgramClient,
@@ -55,10 +55,11 @@ def on_transcript(connection, result, **kwargs):
         speaker_str = "Unknown"
 
     # 1) Accumulate transcripts for batch saving
+    current_timestamp = datetime.now(timezone.utc).isoformat()
     transcripts.append({
         "speaker": speaker_str,
         "transcript": transcript,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": current_timestamp
     })
 
     # 2) Send to external webhook in real time
@@ -66,7 +67,7 @@ def on_transcript(connection, result, **kwargs):
         payload = {
             "speaker": speaker_str,
             "transcript": transcript,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": current_timestamp
         }
         # Synchronous POST request. For high volume, consider async or queue.
         response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
