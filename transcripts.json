@@ -1,27 +1,252 @@
 [
   {
     "speaker": "Speaker 0",
-    "transcript": "Hello there. How are you?",
-    "timestamp": "2025-02-22T20:16:48.877044"
+    "transcript": "Using the speech to text? We're using Deepgram? Yeah.",
+    "timestamp": "2025-02-22T20:29:05.664125"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "Is Deepgram one of the sponsors?",
+    "timestamp": "2025-02-22T20:29:08.207647"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Oh my god.",
-    "timestamp": "2025-02-22T20:16:51.903201"
+    "transcript": "No.",
+    "timestamp": "2025-02-22T20:29:09.132174"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Successfully determined.",
-    "timestamp": "2025-02-22T20:16:52.967296"
+    "transcript": "Doesn't matter, though.",
+    "timestamp": "2025-02-22T20:29:10.256393"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Wait. Wait.",
-    "timestamp": "2025-02-22T20:16:53.730569"
+    "transcript": "So we've got full diarization here, so it knows which speaker is speaking. If I say hello?",
+    "timestamp": "2025-02-22T20:29:14.187621"
   },
   {
     "speaker": "Speaker 0",
-    "transcript": "Wait. I'm getting",
-    "timestamp": "2025-02-22T20:16:55.970082"
+    "transcript": "No. It's not doing it now. Right?",
+    "timestamp": "2025-02-22T20:29:15.761879"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Yes. It is. Oh, it is?",
+    "timestamp": "2025-02-22T20:29:18.739629"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "This is a test",
+    "timestamp": "2025-02-22T20:29:21.488956"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "That meant it's not coming That is very cool.",
+    "timestamp": "2025-02-22T20:29:25.426553"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "That is not coming. That is",
+    "timestamp": "2025-02-22T20:29:28.733267"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "is oh, it's",
+    "timestamp": "2025-02-22T20:29:30.540034"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "pretty accurate as well.",
+    "timestamp": "2025-02-22T20:29:31.698117"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "Okay. Can we",
+    "timestamp": "2025-02-22T20:29:33.990377"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "It's not coming up here.",
+    "timestamp": "2025-02-22T20:29:35.313981"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "It's speaker one.",
+    "timestamp": "2025-02-22T20:29:40.170090"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Okay. Kindly",
+    "timestamp": "2025-02-22T20:29:41.851847"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "good. That's pretty cool. So we're sending that data to make",
+    "timestamp": "2025-02-22T20:29:46.512345"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "is then sending it to",
+    "timestamp": "2025-02-22T20:29:47.710391"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "it was sending it to no It was sending it no. No. No. No. No.",
+    "timestamp": "2025-02-22T20:29:52.799953"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "That's like an",
+    "timestamp": "2025-02-22T20:29:53.447518"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "tools that will kind of, like,",
+    "timestamp": "2025-02-22T20:29:55.581623"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "together. Yeah. Exactly. Pretty cool.",
+    "timestamp": "2025-02-22T20:29:57.042696"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "So we can send this wherever.",
+    "timestamp": "2025-02-22T20:29:58.807410"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "Just set it up as a webhook.",
+    "timestamp": "2025-02-22T20:30:00.408401"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Yeah.",
+    "timestamp": "2025-02-22T20:30:00.843984"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "So,",
+    "timestamp": "2025-02-22T20:30:02.476946"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "basically, we somebody just needs it they could even send it to Slack. Right? Yeah. We could actually have this",
+    "timestamp": "2025-02-22T20:30:07.378398"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "conversation go to Slack and post it Yeah. As different users because it's diarized.",
+    "timestamp": "2025-02-22T20:30:11.199035"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Then you can have, like,",
+    "timestamp": "2025-02-22T20:30:12.432701"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "do anything off",
+    "timestamp": "2025-02-22T20:30:13.310628"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "the list. Yeah. Exactly. Yeah.",
+    "timestamp": "2025-02-22T20:30:15.027339"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "So that's the first",
+    "timestamp": "2025-02-22T20:30:16.455513"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "piece that we've started is we're gonna talk to ASR.",
+    "timestamp": "2025-02-22T20:30:19.634060"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "Oh, here we go. On process data and web cook.",
+    "timestamp": "2025-02-22T20:30:21.791347"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "See how we're trying to hook that up, and then we're gonna",
+    "timestamp": "2025-02-22T20:30:24.841924"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "process it then. Coming in.",
+    "timestamp": "2025-02-22T20:30:26.275864"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "So now it showed up. Yeah.",
+    "timestamp": "2025-02-22T20:30:27.921210"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "There we go. So now it's going into here. Okay. Okay.",
+    "timestamp": "2025-02-22T20:30:31.118945"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "This is a test",
+    "timestamp": "2025-02-22T20:30:31.774787"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Is it live?",
+    "timestamp": "2025-02-22T20:30:33.142383"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "Yeah. It should be. It's live. You refresh the page. No. It's not.",
+    "timestamp": "2025-02-22T20:30:37.305543"
+  },
+  {
+    "speaker": "Speaker 1",
+    "transcript": "I promise you it was working. Okay. Will come it will come soon.",
+    "timestamp": "2025-02-22T20:30:40.364003"
+  },
+  {
+    "speaker": "Speaker 2",
+    "transcript": "I'll switch this off for now.",
+    "timestamp": "2025-02-22T20:30:41.768194"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Are you gonna are you the",
+    "timestamp": "2025-02-22T20:30:43.190256"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "The founders.",
+    "timestamp": "2025-02-22T20:30:44.150939"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "There's no",
+    "timestamp": "2025-02-22T20:30:44.720584"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Not fast.",
+    "timestamp": "2025-02-22T20:30:45.288314"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "I like a I am.",
+    "timestamp": "2025-02-22T20:30:47.256287"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Did you guys invest in my",
+    "timestamp": "2025-02-22T20:30:49.557410"
+  },
+  {
+    "speaker": "Speaker 0",
+    "transcript": "Individual",
+    "timestamp": "2025-02-22T20:30:50.094160"
   }
 ]
