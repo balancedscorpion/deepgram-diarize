@@ -1,0 +1,3 @@
+assemblyai
+"assemblyai[extras]"
+deepgram-sdk
