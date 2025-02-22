@@ -4,7 +4,7 @@ import threading
 import sys
 import json
 import requests
-from datetime import datetime, timezone
+from datetime import datetime
 
 from deepgram import (
     DeepgramClient,
@@ -19,8 +19,13 @@ DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
 if not DEEPGRAM_API_KEY:
     raise EnvironmentError("Missing environment variable 'DEEPGRAM_API_KEY'.")
 
-# Optionally set your external webhook URL in an environment variable
-WEBHOOK_URL = "https://hook.us2.make.com/w8oj0292s3hcxbdrlvvqnmgkfkv7zzn3"
+SUPABASE_API_KEY = os.getenv("SUPABASE_API_KEY")
+if not SUPABASE_API_KEY:
+    raise EnvironmentError("Missing environment variable 'SUPABASE_API_KEY'.")
+
+PROJECT_ID = "mqaiuwpvphctupwtvidm"
+# Construct the Supabase REST URL using the PROJECT_ID
+SUPABASE_URL = f"https://{PROJECT_ID}.supabase.co/rest/v1/conversations"
 
 #######################
 # Microphone Parameters
@@ -38,7 +43,7 @@ def on_transcript(connection, result, **kwargs):
     """
     Callback for when a new transcript is received in real time.
     """
-    alt = result.channel.alternatives[0]  # typed 'ListenWSAlternative'
+    alt = result.channel.alternatives[0]
     transcript = alt.transcript
     if not transcript:
         return  # If there's no transcript text, skip
@@ -55,25 +60,30 @@ def on_transcript(connection, result, **kwargs):
         speaker_str = "Unknown"
 
     # 1) Accumulate transcripts for batch saving
-    current_timestamp = datetime.now(timezone.utc).isoformat()
     transcripts.append({
         "speaker": speaker_str,
         "transcript": transcript,
-        "timestamp": current_timestamp
+        "timestamp": datetime.utcnow().isoformat()
     })
 
-    # 2) Send to external webhook in real time
+    # 2) Send to Supabase in real time
     try:
-        payload = {
+        # Supabase expects an array of objects for insertion
+        payload = [{
             "speaker": speaker_str,
             "transcript": transcript,
-            "timestamp": current_timestamp
+            "timestamp": datetime.utcnow().isoformat()
+        }]
+        headers = {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_API_KEY,
+            "Authorization": f"Bearer {SUPABASE_API_KEY}",
+            "Prefer": "return=minimal"
         }
-        # Synchronous POST request. For high volume, consider async or queue.
-        response = requests.post(WEBHOOK_URL, json=payload, timeout=5)
+        response = requests.post(SUPABASE_URL, json=payload, headers=headers, timeout=5)
         response.raise_for_status()
     except requests.RequestException as e:
-        print(f"Failed to send transcript to webhook: {e}")
+        print(f"Failed to send transcript to Supabase: {e}")
 
 def main():
     # 1) Initialize Deepgram client
@@ -88,7 +98,7 @@ def main():
     # 4) Create options for the Deepgram streaming connection
     #    Including diarization
     options = LiveOptions(
-        model="nova-3",      # Or 'nova-2', etc.
+        model="enhanced-meeting",
         diarize=True,        # Enable speaker diarization
         encoding="linear16", # PCM linear 16 from the microphone
         sample_rate=RATE,
