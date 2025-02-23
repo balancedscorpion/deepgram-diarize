@@ -5,6 +5,7 @@ import axios from 'axios'
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 import Link from 'next/link'
+import DemoTranscriptPanel from '@/components/DemoTranscriptPanel'
 
 export default function DemoPage() {
   const [transcripts, setTranscripts] = useState<any[]>([])
@@ -53,7 +54,7 @@ export default function DemoPage() {
               Switch to Live Mode
             </Link>
           </div>
-          <LiveTranscriptPanel transcripts={transcripts} />
+          <DemoTranscriptPanel transcripts={transcripts} />
         </div>
       </div>
 

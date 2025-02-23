@@ -5,4 +5,5 @@ pyaudio
 deepgram-sdk
 requests
 openai
-websockets 
+websockets
+elevenlabs 

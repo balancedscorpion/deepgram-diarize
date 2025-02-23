@@ -11,6 +11,7 @@ from datetime import datetime
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 from starlette.websockets import WebSocketState
 from typing import Optional, Set
+from fastapi.responses import Response
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)

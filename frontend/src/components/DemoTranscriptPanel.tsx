@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { useConversation } from '@11labs/react'
+import { useState } from 'react'
 import { PlayIcon, StopIcon } from '@heroicons/react/24/solid'
 
 interface Fallacy {
@@ -30,59 +29,76 @@ interface Props {
   transcripts: Transcript[];
 }
 
-export default function LiveTranscriptPanel({ transcripts }: Props) {
+export default function DemoTranscriptPanel({ transcripts }: Props) {
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null)
-  
-  const conversation = useConversation({
-    onConnect: () => console.log('Connected'),
-    onDisconnect: () => console.log('Disconnected'),
-    onMessage: (message) => console.log('Message:', message),
-    onError: (error) => console.error('Error:', error),
-  });
-
-  const speakerColors = {
-    "Speaker 1": "text-blue-600",
-    "Speaker 2": "text-emerald-600",
-    "Speaker 3": "text-purple-600",
-    "Speaker 4": "text-orange-600",
-    "Speaker 5": "text-yellow-600"
-  };
-
-  const highlightFallacy = (text: string, fallacies: Fallacy[]) => {
-    let highlightedText = text;
-    fallacies.forEach(fallacy => {
-      highlightedText = highlightedText.replace(
-        fallacy.segment,
-        `<span class="bg-red-100 group relative cursor-help">
-          ${fallacy.segment}
-          <span class="hidden group-hover:block absolute bottom-full left-0 w-64 p-2 bg-white border rounded-lg shadow-lg text-sm">
-            <strong>${fallacy.type}</strong><br/>
-            ${fallacy.explanation}
-          </span>
-        </span>`
-      );
-    });
-    return <div dangerouslySetInnerHTML={{ __html: highlightedText }} />;
-  };
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
 
   const handlePlay = async (transcript: Transcript) => {
     const messageId = transcript.messageId || transcript.timestamp;
     
     if (playingMessageId === messageId) {
-      await conversation.endSession();
+      audioElement?.pause();
       setPlayingMessageId(null);
+      setAudioElement(null);
       return;
     }
 
-    setPlayingMessageId(messageId);
     try {
-      await conversation.startSession({
-        text: transcript.transcript,
-        voiceId: process.env.NEXT_PUBLIC_VOICE_ID // You'll need to add this to your .env
+      setPlayingMessageId(messageId);
+      
+      // First get available voices
+      const voicesResponse = await fetch('https://api.elevenlabs.io/v1/voices', {
+        headers: {
+          'xi-api-key': process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY!
+        }
       });
+
+      if (!voicesResponse.ok) {
+        throw new Error('Failed to get voices');
+      }
+
+      const voices = await voicesResponse.json();
+      const voice = voices.voices[0]; // Use first available voice
+
+      // Then generate speech
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice.voice_id}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'audio/mpeg',
+          'Content-Type': 'application/json',
+          'xi-api-key': process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY!,
+        },
+        body: JSON.stringify({
+          text: transcript.transcript,
+          model_id: 'eleven_monolingual_v1',
+          voice_settings: {
+            stability: 0.5,
+            similarity_boost: 0.75
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to generate speech');
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        setPlayingMessageId(null);
+        setAudioElement(null);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      setAudioElement(audio);
+      await audio.play();
     } catch (error) {
       console.error('Failed to play audio:', error);
       setPlayingMessageId(null);
+      setAudioElement(null);
     }
   };
 
@@ -95,7 +111,7 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
         return (
           <div key={index} className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className={`font-medium ${speakerColors[t.speaker as keyof typeof speakerColors] || 'text-gray-600'}`}>
+              <span className={`font-medium text-${t.speaker === 'Speaker 1' ? 'blue' : t.speaker === 'Speaker 2' ? 'emerald' : t.speaker === 'Speaker 3' ? 'purple' : t.speaker === 'Speaker 4' ? 'orange' : 'yellow'}-600`}>
                 {t.name || t.speaker}
               </span>
               <span className="text-sm text-gray-400">
@@ -104,7 +120,6 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
               <button
                 onClick={() => handlePlay(t)}
                 className="p-2 rounded-full hover:bg-gray-200 transition-colors"
-                disabled={conversation.status === 'connecting'}
               >
                 {isCurrentlyPlaying ? (
                   <StopIcon className="w-5 h-5 text-purple-600" />
@@ -115,7 +130,7 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
             </div>
             <div className="text-gray-600">
               {t.analysis?.fallacies?.length > 0 
-                ? highlightFallacy(t.transcript, t.analysis.fallacies)
+                ? <div dangerouslySetInnerHTML={{ __html: t.transcript }} />
                 : t.transcript
               }
             </div>
