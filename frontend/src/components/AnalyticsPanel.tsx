@@ -1,6 +1,9 @@
+/** @jsxImportSource react */
 'use client'
 
-import { useMemo, useState } from 'react'
+import React from 'react'
+import { useMemo, useEffect, useState } from 'react'
+import axios from 'axios'
 import AnalyticsCarousel from './AnalyticsCarousel'
 import {
   LineChart,
@@ -63,23 +66,45 @@ type DetailedViews = {
   [key: string]: JSX.Element;
 };
 
-export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) {
+const AnalyticsPanel: React.FC<Props> = ({ transcripts, visibleUpTo = 0 }) => {
   const [selectedChart, setSelectedChart] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const CHARTS_PER_PAGE = 4;
+  const [speakerSentiments, setSpeakerSentiments] = useState<any[]>([])
+  const [objective, setObjective] = useState<string>("")
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+  // Fetch sentiment and objective data
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        // Fetch sentiment data
+        const sentimentResponse = await axios.get(`${API_URL}/real-time/sentiment`)
+        const sentimentData = JSON.parse(sentimentResponse.data.sentiment_response || '[]')
+        setSpeakerSentiments(sentimentData)
+
+        // Fetch objective data
+        const objectiveResponse = await axios.get(`${API_URL}/real-time/objective`)
+        const objectiveData = JSON.parse(objectiveResponse.data.objective_response || '[]')
+        setObjective(objectiveData[0]?.Objective || "Real-time transcription with analysis")
+      } catch (error) {
+        console.error('Error fetching analytics:', error)
+      }
+    }
+
+    // Only fetch if we have transcripts
+    if (transcripts.length > 0) {
+      fetchAnalytics()
+    }
+  }, [transcripts, API_URL])
 
   const sentimentData = useMemo(() => {
-    const humanTranscripts = transcripts
-      .filter(t => !t.isAIIntervention)
-      .slice(0, visibleUpTo);
-    
-    const timePoints = [...new Set(humanTranscripts.map(t => t.timestamp))].sort();
-    
+    const timePoints = [...new Set(transcripts.map(t => t.timestamp))].sort();
     const speakerData: { [key: string]: { [key: string]: number } } = {};
     
-    humanTranscripts.forEach(t => {
-      // Remove the role/title from the name
-      const name = t.name.split(' ')[0];
+    // Initialize with real-time sentiment from transcripts
+    transcripts.forEach(t => {
+      const name = t.name.split(' (')[0];
       const time = new Date(t.timestamp).toLocaleTimeString();
       if (!speakerData[name]) {
         speakerData[name] = {};
@@ -87,64 +112,83 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
       speakerData[name][time] = t.analysis?.sentiment ?? 0;
     });
 
+    // Update with LLM-based sentiment analysis
+    speakerSentiments.forEach(sentiment => {
+      const name = sentiment.Speaker;
+      const latestTime = new Date(transcripts[transcripts.length - 1]?.timestamp || new Date()).toLocaleTimeString();
+      if (!speakerData[name]) {
+        speakerData[name] = {};
+      }
+      speakerData[name][latestTime] = sentiment.Sentiment;
+    });
+
     return timePoints.map(timestamp => {
       const time = new Date(timestamp).toLocaleTimeString();
       const point: any = { timestamp: time };
       Object.keys(speakerData).forEach(speaker => {
-        point[speaker] = speakerData[speaker][time] ?? 0;
+        point[speaker] = speakerData[speaker][time] ?? null;
       });
       return point;
     });
-  }, [transcripts, visibleUpTo]);
-
-  const SPEAKER_COLORS = {
-    'Maria': '#0088FE',    // Blue
-    'Jack': '#00C49F',     // Green
-    'Jamie': '#9747FF',    // Purple
-    'Annalece': '#FF8042', // Orange
-    'Lisa': '#8884D8',     // Light purple
-    'AI Assistant': '#B4B4B4' // Gray
-  };
+  }, [transcripts, speakerSentiments]);
 
   const speakers = useMemo(() => 
-    [...new Set(transcripts
-      .filter(t => !t.isAIIntervention)
-      .map(t => t.name.split(' ')[0]))]
+    [...new Set(transcripts.map(t => t.name.split(' (')[0]))]
   , [transcripts]);
 
   const densityData = useMemo(() => 
-    transcripts
-      .slice(0, visibleUpTo)
-      .map(t => ({
-        timestamp: new Date(t.timestamp).toLocaleTimeString(),
-        density: t.analysis?.info_density ?? 0.5
-      }))
-  , [transcripts, visibleUpTo]);
+    transcripts.map(t => ({
+      timestamp: new Date(t.timestamp).toLocaleTimeString(),
+      density: t.analysis?.info_density ?? 0.5
+    })), [transcripts]
+  )
 
   const speakerContribution = useMemo(() => {
     const counts: { [key: string]: number } = {}
-    transcripts
-      .slice(0, visibleUpTo)
-      .forEach(t => {
-        const name = t.name.split(' ')[0]
-        counts[name] = (counts[name] || 0) + 1
-      })
+    transcripts.forEach(t => {
+      const name = t.name.split(' (')[0]
+      counts[name] = (counts[name] || 0) + 1
+    })
     return Object.entries(counts).map(([name, value]) => ({ name, value }))
-  }, [transcripts, visibleUpTo]);
+  }, [transcripts])
 
   const fallacyTypes = useMemo(() => {
     const types: { [key: string]: number } = {}
-    transcripts
-      .slice(0, visibleUpTo)
-      .forEach(t => {
-        t.analysis?.fallacies?.forEach((f: any) => {
-          types[f.type] = (types[f.type] || 0) + 1
-        })
+    transcripts.forEach(t => {
+      t.analysis?.fallacies?.forEach((f: any) => {
+        types[f.type] = (types[f.type] || 0) + 1
       })
+    })
     return Object.entries(types).map(([type, count]) => ({ type, count }))
-  }, [transcripts, visibleUpTo]);
+  }, [transcripts])
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
+  const COLORS = [
+    '#0088FE',  // Blue
+    '#00C49F',  // Green
+    '#FFBB28',  // Yellow
+    '#FF8042',  // Orange
+    '#8884D8',  // Purple
+    '#FF6B6B',  // Red
+    '#4ECDC4',  // Teal
+    '#45B7D1',  // Light Blue
+    '#96CEB4',  // Mint
+    '#D4A5A5'   // Rose
+  ];
+
+  // Dynamically assign colors to speakers
+  const SPEAKER_COLORS = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    speakers.forEach((speaker, index) => {
+      const speakerMatch = speaker.match(/Speaker (\d+)/);
+      if (speakerMatch) {
+        const speakerNum = parseInt(speakerMatch[1]) - 1;
+        colors[speaker] = COLORS[speakerNum % COLORS.length];
+      } else {
+        colors[speaker] = COLORS[index % COLORS.length];
+      }
+    });
+    return colors;
+  }, [speakers]);
 
   const renderCustomizedLabel = (props: any) => {
     const { cx, cy, midAngle, innerRadius, outerRadius, name, value, percent } = props;
@@ -288,13 +332,15 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
                   border: '1px solid #e5e7eb'
                 }}
               />
-              {speakers.map((speaker) => (
+              {speakers.map(speaker => (
                 <Line
                   key={speaker}
                   type="monotone"
                   dataKey={speaker}
                   stroke={SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS]}
-                  dot={{ fill: SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS] }}
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  connectNulls
                 />
               ))}
             </LineChart>
@@ -305,18 +351,9 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
     'Information Density': (
       <div className="h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            data={densityData} 
-            margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
-          >
+          <BarChart data={densityData}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis 
-              dataKey="timestamp"
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tick={{ fontSize: 12 }}
-            />
+            <XAxis dataKey="timestamp" />
             <YAxis domain={[0, 1]} />
             <Tooltip />
             <Bar dataKey="density" fill="#82ca9d" />
@@ -327,14 +364,14 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
     'Speaker Contribution': (
       <div className="h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart margin={{ top: 10, right: 30, left: 0, bottom: 10 }}>
+          <PieChart>
             <Pie
               data={speakerContribution}
               dataKey="value"
               nameKey="name"
               cx="50%"
               cy="50%"
-              outerRadius={70}
+              outerRadius={100}
               labelLine={true}
               label={renderCustomizedLabel}
             >
@@ -345,7 +382,15 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
                 />
               ))}
             </Pie>
-            <Tooltip />
+            <Tooltip 
+              formatter={(value, name) => [`${value} messages`, name]}
+              contentStyle={{ 
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                padding: '8px',
+                border: '1px solid #e5e7eb'
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -353,11 +398,7 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
     'Fallacy Types': (
       <div className="h-[180px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart 
-            data={fallacyTypes}
-            layout="vertical"
-            margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
-          >
+          <BarChart data={fallacyTypes} layout="vertical">
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis type="number" />
             <YAxis dataKey="type" type="category" width={150} />
@@ -587,4 +628,6 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
       </Modal>
     </>
   );
-} 
+}
+
+export default AnalyticsPanel; 

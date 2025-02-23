@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useConversation } from '@11labs/react'
 import { PlayIcon, StopIcon } from '@heroicons/react/24/solid'
 
@@ -32,20 +32,28 @@ interface Props {
 
 export default function LiveTranscriptPanel({ transcripts }: Props) {
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [transcriptHeight, setTranscriptHeight] = useState('600px')
   
   const conversation = useConversation({
     onConnect: () => console.log('Connected'),
     onDisconnect: () => console.log('Disconnected'),
-    onMessage: (message) => console.log('Message:', message),
-    onError: (error) => console.error('Error:', error),
+    onMessage: (message: { text: string; metadata?: any }) => console.log('Message:', message),
+    onError: (error: Error) => console.error('Error:', error),
   });
+
+  // Auto-scroll to bottom when new transcripts arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcripts]);
 
   const speakerColors = {
     "Speaker 1": "text-blue-600",
     "Speaker 2": "text-emerald-600",
     "Speaker 3": "text-purple-600",
     "Speaker 4": "text-orange-600",
-    "Speaker 5": "text-yellow-600"
+    "Speaker 5": "text-yellow-600",
+    "Unknown": "text-gray-600"
   };
 
   const highlightFallacy = (text: string, fallacies: Fallacy[]) => {
@@ -78,7 +86,7 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
     try {
       await conversation.startSession({
         text: transcript.transcript,
-        voiceId: process.env.NEXT_PUBLIC_VOICE_ID // You'll need to add this to your .env
+        voiceId: process.env.NEXT_PUBLIC_VOICE_ID
       });
     } catch (error) {
       console.error('Failed to play audio:', error);
@@ -87,7 +95,7 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
   };
 
   return (
-    <div className="space-y-4 max-h-[600px] overflow-y-auto">
+    <div className="space-y-4" style={{ maxHeight: transcriptHeight, overflowY: 'auto' }}>
       {transcripts.map((t, index) => {
         const messageId = t.messageId || t.timestamp;
         const isCurrentlyPlaying = playingMessageId === messageId;
@@ -130,10 +138,21 @@ export default function LiveTranscriptPanel({ transcripts }: Props) {
                   Controversial
                 </span>
               )}
+              {t.analysis?.sentiment > 0.5 && (
+                <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                  Positive
+                </span>
+              )}
+              {t.analysis?.sentiment < -0.5 && (
+                <span className="bg-red-50 text-red-700 px-2 py-0.5 rounded">
+                  Negative
+                </span>
+              )}
             </div>
           </div>
         );
       })}
+      <div ref={messagesEndRef} />
     </div>
   );
 } 
