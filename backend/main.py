@@ -2,6 +2,7 @@ import os
 import json
 import threading
 from datetime import datetime
+import asyncio
 
 import pyaudio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -43,10 +44,13 @@ connected_clients = set()
 stop_event = threading.Event()
 audio_thread = None
 
+# Add this near the top of the file with other globals
+loop = None  # Will store our main event loop
+
 ####################################
 # Broadcast Helper
 ####################################
-def broadcast_transcript(data: dict):
+async def broadcast_transcript(data: dict):
     """
     Sends transcript JSON to all /ws clients.
     If speaker diarization is present, `data` includes speaker label.
@@ -55,9 +59,9 @@ def broadcast_transcript(data: dict):
     for ws in list(connected_clients):
         if ws.client_state == WebSocketState.CONNECTED:
             try:
-                ws.send_text(payload)
-            except Exception:
-                pass  # e.g. if client closed unexpectedly
+                await ws.send_text(payload)
+            except Exception as e:
+                print(f"Error broadcasting to client: {e}")
 
 ####################################
 # Deepgram Transcription Callback
@@ -65,7 +69,6 @@ def broadcast_transcript(data: dict):
 def on_transcript(connection, result, **kwargs):
     """
     Called each time Deepgram returns a transcript chunk.
-    If diarization is enabled, we look at the first word's speaker label.
     """
     alt = result.channel.alternatives[0]
     text = alt.transcript
@@ -73,7 +76,6 @@ def on_transcript(connection, result, **kwargs):
         return  # Skip empty partials
 
     # Determine speaker label if diarization is enabled
-    # words[0].speaker might be 0, 1, etc. or None
     words = alt.words
     if words and words[0].speaker is not None:
         speaker_label = f"Speaker {words[0].speaker}"
@@ -90,8 +92,12 @@ def on_transcript(connection, result, **kwargs):
         "timestamp": datetime.utcnow().isoformat()
     }
 
-    # Broadcast to all connected websockets
-    broadcast_transcript(transcript_data)
+    # Get the event loop and run the broadcast
+    global loop
+    if loop and loop.is_running():
+        loop.call_soon_threadsafe(
+            lambda: asyncio.create_task(broadcast_transcript(transcript_data))
+        )
 
 ####################################
 # Audio Worker Thread
@@ -209,3 +215,9 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+
+@app.on_event("startup")
+async def startup_event():
+    """Store the event loop when the app starts"""
+    global loop
+    loop = asyncio.get_running_loop()
