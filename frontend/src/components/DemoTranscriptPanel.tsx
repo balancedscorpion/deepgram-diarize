@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PlayIcon, StopIcon } from '@heroicons/react/24/solid'
+import Image from 'next/image'
 
 interface Fallacy {
   type: string;
@@ -23,14 +24,109 @@ interface Transcript {
   timestamp: string;
   analysis: Analysis;
   messageId?: string;
+  isAIIntervention?: boolean;
 }
 
 interface Props {
   transcripts: Transcript[];
+  onVisibleIndexChange?: (index: number) => void;
 }
 
-export default function DemoTranscriptPanel({ transcripts }: Props) {
+interface StreamingState {
+  isStreaming: boolean;
+  showTags: boolean;
+}
+
+export default function DemoTranscriptPanel({ 
+  transcripts: fullTranscripts,
+  onVisibleIndexChange 
+}: Props) {
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const [visibleTranscripts, setVisibleTranscripts] = useState<Transcript[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [streamingStates, setStreamingStates] = useState<{ [key: string]: StreamingState }>({});
+  const streamingRef = useRef<boolean>(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [transcriptHeight, setTranscriptHeight] = useState('300px');
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ 
+      behavior: "smooth",
+      block: "end"
+    });
+  };
+
+  useEffect(() => {
+    if (isStreaming) {
+      scrollToBottom();
+    }
+  }, [visibleTranscripts, isStreaming]);
+
+  useEffect(() => {
+    if (!hasStarted || currentIndex >= fullTranscripts.length) {
+      setIsComplete(true);
+      return;
+    }
+    
+    if (isPaused) return;
+
+    const transcript = fullTranscripts[currentIndex];
+    const delay = transcript.isAIIntervention ? 500 : 1000;
+
+    const timer = setTimeout(() => {
+      if (isPaused) return;
+      
+      setVisibleTranscripts(prev => [...prev, {
+        ...transcript,
+        transcript: ''
+      }]);
+      streamText(transcript.transcript, transcript.isAIIntervention, transcript.timestamp);
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [currentIndex, fullTranscripts, onVisibleIndexChange, isPaused, hasStarted]);
+
+  const streamText = async (text: string, isAI: boolean = false, timestamp: string) => {
+    streamingRef.current = true;
+    setStreamingStates(prev => ({
+      ...prev,
+      [timestamp]: { isStreaming: true, showTags: false }
+    }));
+    
+    const streamDelay = isAI ? 30 : 40;
+    
+    for (let i = 0; i <= text.length; i++) {
+      if (!streamingRef.current || isPaused) {
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, streamDelay));
+      setVisibleTranscripts(prev => {
+        const newTranscripts = [...prev];
+        if (newTranscripts.length > 0) {
+          newTranscripts[newTranscripts.length - 1] = {
+            ...newTranscripts[newTranscripts.length - 1],
+            transcript: text.slice(0, i)
+          };
+        }
+        return newTranscripts;
+      });
+    }
+    
+    if (!isPaused) {
+      setStreamingStates(prev => ({
+        ...prev,
+        [timestamp]: { isStreaming: false, showTags: true }
+      }));
+      streamingRef.current = false;
+      setCurrentIndex(prev => prev + 1);
+      onVisibleIndexChange?.(currentIndex + 1);
+    }
+  };
 
   const highlightFallacy = (text: string, fallacies: Fallacy[]) => {
     let highlightedText = text;
@@ -118,53 +214,199 @@ export default function DemoTranscriptPanel({ transcripts }: Props) {
     }
   };
 
-  return (
-    <div className="space-y-4 max-h-[600px] overflow-y-auto">
-      {transcripts.map((t, i) => {
-        const messageId = t.messageId || t.timestamp;
-        const isCurrentlyPlaying = playingId === messageId;
+  const togglePause = () => {
+    setIsPaused(prev => {
+      if (!prev) {
+        streamingRef.current = false;
+      } else {
+        streamingRef.current = true;
+        const currentTranscript = fullTranscripts[currentIndex];
+        if (currentTranscript) {
+          streamText(
+            currentTranscript.transcript,
+            currentTranscript.isAIIntervention,
+            currentTranscript.timestamp
+          );
+        }
+      }
+      return !prev;
+    });
+  };
 
-        return (
-          <div key={i} className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className={`font-medium text-${t.speaker === 'Speaker 1' ? 'blue' : t.speaker === 'Speaker 2' ? 'emerald' : t.speaker === 'Speaker 3' ? 'purple' : t.speaker === 'Speaker 4' ? 'orange' : 'yellow'}-600`}>
-                {t.name || t.speaker}
-              </span>
-              <span className="text-sm text-gray-400">
-                {new Date(t.timestamp).toLocaleTimeString()}
-              </span>
+  const startDemo = () => {
+    setHasStarted(true);
+    setCurrentIndex(0);
+    setVisibleTranscripts([]);
+    setIsComplete(false);
+    setIsPaused(false);
+    setStreamingStates({});
+    onVisibleIndexChange?.(0);
+  };
+
+  const resetDemo = () => {
+    streamingRef.current = false;
+    setHasStarted(false);
+    setVisibleTranscripts([]);
+    setCurrentIndex(0);
+    setIsStreaming(false);
+    setIsPaused(false);
+    setIsComplete(false);
+    setStreamingStates({});
+    onVisibleIndexChange?.(0);
+  };
+
+  const getSpeakerColorClass = (name: string) => {
+    // Get just the first name
+    const firstName = name.split(' ')[0];
+    switch (firstName) {
+      case 'Maria': return 'text-[#0088FE]';
+      case 'Jack': return 'text-[#00C49F]';
+      case 'Jamie': return 'text-[#9747FF]';
+      case 'Annalece': return 'text-[#FF8042]';
+      case 'Lisa': return 'text-[#8884D8]';
+      default: return 'text-purple-600'; // AI Assistant
+    }
+  };
+
+  useEffect(() => {
+    const calculateHeight = () => {
+      const viewportHeight = window.innerHeight;
+      const transcriptContainer = document.querySelector('.transcript-container');
+      const transcriptTop = transcriptContainer?.getBoundingClientRect().top || 0;
+      const bottomPadding = 32; // 2rem
+      const newHeight = viewportHeight - transcriptTop - bottomPadding;
+      setTranscriptHeight(`${Math.max(300, newHeight)}px`);
+    };
+
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    return () => window.removeEventListener('resize', calculateHeight);
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex gap-2">
+          {!hasStarted ? (
+            <button
+              onClick={startDemo}
+              className="px-3 py-1.5 text-sm rounded-lg font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+            >
+              Start Demo
+            </button>
+          ) : (
+            <>
+              {!isComplete && (
+                <button
+                  onClick={togglePause}
+                  className="px-3 py-1.5 text-sm rounded-lg font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                >
+                  {isPaused ? 'Resume' : 'Pause'}
+                </button>
+              )}
               <button
-                onClick={() => handlePlay(t)}
-                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                onClick={resetDemo}
+                className="px-3 py-1.5 text-sm rounded-lg font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
               >
-                {isCurrentlyPlaying ? (
-                  <StopIcon className="w-4 h-4 text-purple-600" />
-                ) : (
-                  <PlayIcon className="w-4 h-4 text-purple-600" />
-                )}
+                Restart Demo
               </button>
-            </div>
-            <div className="text-gray-600">
-              {t.analysis?.fallacies?.length > 0 
-                ? highlightFallacy(t.transcript, t.analysis.fallacies)
-                : t.transcript
-              }
-            </div>
-            <div className="flex gap-2 text-sm">
-              {t.analysis?.info_density > 0.8 && (
-                <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
-                  High Density
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500 text-sm">Powered by</span>
+          <a 
+            href="https://elevenlabs.io" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hover:opacity-80 transition-opacity"
+          >
+            <Image
+              src="/elevenlabs-logo.png"
+              alt="ElevenLabs"
+              width={120}
+              height={40}
+              priority
+            />
+          </a>
+        </div>
+      </div>
+
+      {isPaused && (
+        <div className="text-sm text-gray-500 animate-pulse text-center mb-4">
+          Demo paused
+        </div>
+      )}
+      
+      <div 
+        className="transcript-container overflow-y-auto space-y-4 pr-4"
+        style={{ maxHeight: transcriptHeight }}
+      >
+        {visibleTranscripts.map((t, i) => {
+          const messageId = t.messageId || t.timestamp;
+          const isCurrentlyPlaying = playingId === messageId;
+          const isAIIntervention = t.isAIIntervention;
+
+          return (
+            <div 
+              key={i} 
+              className={`space-y-1 animate-fadeIn ${
+                isAIIntervention ? 'pl-8' : ''
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`font-medium ${
+                  isAIIntervention 
+                    ? 'text-purple-600' 
+                    : getSpeakerColorClass(t.name)
+                }`}>
+                  {isAIIntervention ? 'ElevenLabs AI Agent' : t.name.split(' ')[0]}
                 </span>
-              )}
-              {t.analysis?.controversial && (
-                <span className="bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded">
-                  Controversial
+                <span className="text-sm text-gray-400">
+                  {new Date(t.timestamp).toLocaleTimeString()}
                 </span>
+                {isAIIntervention && (
+                  <button
+                    onClick={() => handlePlay(t)}
+                    className="p-1 rounded-full hover:bg-gray-200 transition-colors"
+                  >
+                    {isCurrentlyPlaying ? (
+                      <StopIcon className="w-4 h-4 text-purple-600" />
+                    ) : (
+                      <PlayIcon className="w-4 h-4 text-purple-600" />
+                    )}
+                  </button>
+                )}
+              </div>
+              <div className={`${
+                isAIIntervention 
+                  ? 'text-purple-600 italic' 
+                  : 'text-gray-600'
+              }`}>
+                {t.analysis?.fallacies?.length > 0 && !isAIIntervention
+                  ? highlightFallacy(t.transcript, t.analysis.fallacies)
+                  : t.transcript
+                }
+              </div>
+              {!isAIIntervention && streamingStates[t.timestamp]?.showTags && (
+                <div className="flex gap-2 text-sm">
+                  {t.analysis?.info_density > 0.8 && (
+                    <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded">
+                      High Density
+                    </span>
+                  )}
+                  {t.analysis?.controversial && (
+                    <span className="bg-yellow-50 text-yellow-700 px-2 py-0.5 rounded">
+                      Controversial
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 } 
