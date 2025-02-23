@@ -7,9 +7,9 @@ import AnalyticsPanel from '@/components/AnalyticsPanel'
 import Link from 'next/link'
 
 const logger = {
-  info: (...args: any[]) => console.log('[INFO]', ...args),
-  error: (...args: any[]) => console.error('[ERROR]', ...args),
-  debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
+  info: (...args: unknown[]) => console.log('[INFO]', ...args),
+  error: (...args: unknown[]) => console.error('[ERROR]', ...args),
+  debug: (...args: unknown[]) => console.debug('[DEBUG]', ...args),
 };
 
 export default function RealTimePage() {
@@ -40,8 +40,12 @@ export default function RealTimePage() {
           logger.error('Failed to parse message:', err)
         }
       }
-      ws.onerror = (err) => {
-        logger.error('WebSocket error:', err)
+      ws.onerror = (event) => {
+        if (event instanceof ErrorEvent) {
+          logger.error('WebSocket error:', event.error)
+        } else {
+          logger.error('WebSocket error event:', event)
+        }
         setError('Failed to connect to WebSocket server')
       }
       ws.onclose = () => {
@@ -62,11 +66,23 @@ export default function RealTimePage() {
     openWebSocket()
 
     try {
-      await axios.post(`${API_URL}/real-time/start`)
+      const response = await axios.post(`${API_URL}/real-time/start`)
+      logger.info('Recording started successfully:', response.data)
       setIsRecording(true)
     } catch (err) {
-      logger.error('Failed to start recording:', err)
-      setError('Failed to start recording')
+      if (axios.isAxiosError(err)) {
+        const errorMessage = err.response?.data?.message || err.message || 'Failed to start recording'
+        logger.error('Failed to start recording:', {
+          message: errorMessage,
+          status: err.response?.status,
+          url: `${API_URL}/real-time/start`
+        })
+        setError(errorMessage)
+      } else {
+        logger.error('Unexpected error:', err)
+        setError('An unexpected error occurred')
+      }
+      
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
