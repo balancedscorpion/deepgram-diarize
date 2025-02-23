@@ -162,6 +162,17 @@ def on_transcript(connection, result, **kwargs):
         # --- Call LLM for sentiment ---
         llm_sentiment = get_speaker_sentiment(TRANSCRIPT_MEMORY)
         logger.info(f"LLM speaker sentiment response: {llm_sentiment}")
+        
+        # Parse and update sentiment scores
+        try:
+            sentiment_data = json.loads(llm_sentiment)
+            if isinstance(sentiment_data, list):
+                for speaker_sentiment in sentiment_data:
+                    if speaker_sentiment["Speaker"] == speaker_label:
+                        transcript_data["analysis"]["sentiment"] = speaker_sentiment["Sentiment"]
+                        break
+        except Exception as e:
+            logger.error(f"Error parsing sentiment response: {e}")
 
         # --- Broadcast only the new transcript ---
         global loop
