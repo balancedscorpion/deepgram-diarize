@@ -5,6 +5,12 @@ import axios from 'axios'
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 
+const logger = {
+  info: (...args: any[]) => console.log('[INFO]', ...args),
+  error: (...args: any[]) => console.error('[ERROR]', ...args),
+  debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
+};
+
 export default function Home() {
   const [transcripts, setTranscripts] = useState<any[]>([])
   const [isRecording, setIsRecording] = useState(false)
@@ -12,40 +18,57 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
+    logger.info('Initializing WebSocket connection...');
     wsRef.current = new WebSocket('ws://localhost:8000/ws')
+    
+    wsRef.current.onopen = () => {
+      logger.info('WebSocket connection established');
+    };
     
     wsRef.current.onmessage = (event) => {
       const transcript = JSON.parse(event.data)
+      logger.debug('Received transcript:', transcript);
       setTranscripts(prev => [...prev, transcript])
     }
 
     wsRef.current.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      logger.error('WebSocket error:', error)
       setError('Failed to connect to WebSocket server')
     }
 
+    wsRef.current.onclose = () => {
+      logger.info('WebSocket connection closed');
+    };
+
     return () => {
+      logger.info('Cleaning up WebSocket connection...');
       wsRef.current?.close()
     }
   }, [])
 
   const handleStartRecording = async () => {
     try {
+      logger.info('Starting recording...');
       await axios.post('http://localhost:8000/start')
       setIsRecording(true)
       setError(null)
       setTranscripts([])
+      logger.info('Recording started successfully');
     } catch (error) {
+      logger.error('Failed to start recording:', error);
       setError("Failed to start recording")
     }
   }
 
   const handleStopRecording = async () => {
     try {
+      logger.info('Stopping recording...');
       await axios.post('http://localhost:8000/stop')
       setIsRecording(false)
       setError(null)
+      logger.info('Recording stopped successfully');
     } catch (error) {
+      logger.error('Failed to stop recording:', error);
       setError("Failed to stop recording")
     }
   }
