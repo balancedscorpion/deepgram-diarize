@@ -33,14 +33,14 @@ export default function AnalyticsPanel({ transcripts }: Props) {
       if (!speakerData[name]) {
         speakerData[name] = {};
       }
-      speakerData[name][time] = t.analysis.sentiment;
+      speakerData[name][time] = t.analysis?.sentiment ?? 0;
     });
 
     return timePoints.map(timestamp => {
       const time = new Date(timestamp).toLocaleTimeString();
       const point: any = { timestamp: time };
       Object.keys(speakerData).forEach(speaker => {
-        point[speaker] = speakerData[speaker][time] || null;
+        point[speaker] = speakerData[speaker][time] ?? 0;
       });
       return point;
     });
@@ -61,7 +61,7 @@ export default function AnalyticsPanel({ transcripts }: Props) {
   const densityData = useMemo(() => 
     transcripts.map(t => ({
       timestamp: new Date(t.timestamp).toLocaleTimeString(),
-      density: t.analysis.info_density
+      density: t.analysis?.info_density ?? 0.5
     })), [transcripts]
   )
 
@@ -77,7 +77,7 @@ export default function AnalyticsPanel({ transcripts }: Props) {
   const fallacyTypes = useMemo(() => {
     const types: { [key: string]: number } = {}
     transcripts.forEach(t => {
-      t.analysis.fallacies.forEach((f: any) => {
+      t.analysis?.fallacies?.forEach((f: any) => {
         types[f.type] = (types[f.type] || 0) + 1
       })
     })
