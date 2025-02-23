@@ -88,7 +88,7 @@ def get_speaker_sentiment(transcript_entries: List[TranscriptEntry]) -> str:
 
 Your goal is to produce a JSON array containing the sentiment score per speaker provided in the conversation.
 
-For each unique speaker, compute a sentiment score that reflects the overall tone of their contributions. The sentiment score should be a floating point number between -1 (very negative) and 1 (very positive).
+For each unique speaker, compute a sentiment score that reflects the overall tone of that individual speaker. Make sure to compute the sentiment score ONLY for that speaker. The sentiment score should be a floating point number between -1 (very negative) and 1 (very positive).
 
 The output:
 - MUST be valid JSON conforming to the schema below:
