@@ -44,6 +44,11 @@ loop = None
 # Track partial transcripts so we can broadcast new text without repeating
 speaker_partial = {}  # Maps speaker label -> last partial transcript text
 
+# Cache for objective to prevent too frequent LLM calls
+last_objective_update = None
+cached_objective = None
+OBJECTIVE_CACHE_DURATION = 5  # seconds
+
 app = FastAPI()
 
 # Configure CORS
@@ -88,9 +93,34 @@ async def get_transcript_memory():
 async def get_objective():
     """
     Return the LLM's textual response for the conversation objective.
+    Uses caching to prevent too frequent LLM calls.
     """
-    llm_response = get_meeting_objective(TRANSCRIPT_MEMORY)
-    return {"objective_response": llm_response}
+    global last_objective_update, cached_objective
+    current_time = datetime.utcnow()
+    
+    # If we have a cached result that's still fresh, return it
+    if (last_objective_update and cached_objective and 
+        (current_time - last_objective_update).total_seconds() < OBJECTIVE_CACHE_DURATION):
+        return {"objective_response": cached_objective}
+    
+    # If no transcripts, return default message
+    if not TRANSCRIPT_MEMORY:
+        return {"objective_response": json.dumps([{"Objective": "Real-time transcription with analysis"}])}
+    
+    # Otherwise, get fresh objective
+    try:
+        llm_response = get_meeting_objective(TRANSCRIPT_MEMORY)
+        # Validate JSON format
+        json.loads(llm_response)  # This will raise an exception if invalid JSON
+        cached_objective = llm_response
+        last_objective_update = current_time
+        return {"objective_response": llm_response}
+    except Exception as e:
+        logger.error(f"Error getting objective: {e}")
+        # Return last cached objective if available, otherwise default
+        if cached_objective:
+            return {"objective_response": cached_objective}
+        return {"objective_response": json.dumps([{"Objective": "Real-time transcription with analysis"}])}
 
 # -------------------
 # Sentiment Endpoint
@@ -127,7 +157,9 @@ def on_transcript(connection, result, **kwargs):
     # Identify speaker if diarization is enabled
     speaker_label = "Unknown"
     if alt.words and alt.words[0].speaker is not None:
-        speaker_label = f"Speaker {alt.words[0].speaker}"
+        # Add 1 to speaker index to start from 1 instead of 0
+        speaker_num = alt.words[0].speaker + 1
+        speaker_label = f"Speaker {speaker_num}"
 
     old_partial = speaker_partial.get(speaker_label, "")
     i = 0

@@ -68,7 +68,16 @@ export default function AnalyticsPanel({ transcripts }: Props) {
   const SPEAKER_COLORS = useMemo(() => {
     const colors: { [key: string]: string } = {};
     speakers.forEach((speaker, index) => {
-      colors[speaker] = COLORS[index % COLORS.length];
+      // Extract speaker number if it's in the format "Speaker N"
+      const speakerMatch = speaker.match(/Speaker (\d+)/);
+      if (speakerMatch) {
+        // Use the actual speaker number (1-based) to determine color
+        const speakerNum = parseInt(speakerMatch[1]) - 1;
+        colors[speaker] = COLORS[speakerNum % COLORS.length];
+      } else {
+        // For non-numbered speakers, use the index
+        colors[speaker] = COLORS[index % COLORS.length];
+      }
     });
     return colors;
   }, [speakers]);
