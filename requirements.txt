@@ -1,3 +1,0 @@
-deepgram-sdk
-requests
-pyaudio
