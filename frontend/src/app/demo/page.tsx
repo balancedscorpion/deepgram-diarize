@@ -120,9 +120,6 @@ export default function DemoPage() {
               <div className="text-blue-600 font-medium text-sm">Jack</div>
             </div>
           </div>
-          <div className="mt-4 text-center italic text-sm text-purple-600 bg-purple-50 p-3 rounded-lg max-w-3xl mx-auto">
-            🤖 ElevenLabs Agent suggests: &quot;Based on this meeting&apos;s analysis, consider giving Jamie a warning for making unsubstantiated claims, and maybe it&apos;s time for Lisa to explore exciting opportunities elsewhere... Just saying!&quot;
-          </div>
         </div>
       )}
 
