@@ -50,13 +50,28 @@ export default function AnalyticsPanel({ transcripts }: Props) {
     [...new Set(transcripts.map(t => t.name.split(' (')[0]))]
   , [transcripts]);
 
-  const SPEAKER_COLORS = {
-    'Sarah': '#0088FE',
-    'Alex': '#00C49F',
-    'Maya': '#FFBB28',
-    'James': '#FF8042',
-    'Lisa': '#8884D8'
-  };
+  // Define a wider range of colors for different speakers
+  const COLORS = [
+    '#0088FE',  // Blue
+    '#00C49F',  // Green
+    '#FFBB28',  // Yellow
+    '#FF8042',  // Orange
+    '#8884D8',  // Purple
+    '#FF6B6B',  // Red
+    '#4ECDC4',  // Teal
+    '#45B7D1',  // Light Blue
+    '#96CEB4',  // Mint
+    '#D4A5A5'   // Rose
+  ];
+
+  // Dynamically assign colors to speakers
+  const SPEAKER_COLORS = useMemo(() => {
+    const colors: { [key: string]: string } = {};
+    speakers.forEach((speaker, index) => {
+      colors[speaker] = COLORS[index % COLORS.length];
+    });
+    return colors;
+  }, [speakers]);
 
   const densityData = useMemo(() => 
     transcripts.map(t => ({
@@ -83,8 +98,6 @@ export default function AnalyticsPanel({ transcripts }: Props) {
     })
     return Object.entries(types).map(([type, count]) => ({ type, count }))
   }, [transcripts])
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
   const renderCustomizedLabel = (props: any) => {
     const { cx, cy, midAngle, innerRadius, outerRadius, name, value, percent } = props;
