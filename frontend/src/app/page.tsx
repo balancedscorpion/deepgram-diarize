@@ -5,42 +5,34 @@ import axios from 'axios'
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
 const logger = {
   info: (...args: any[]) => console.log('[INFO]', ...args),
   error: (...args: any[]) => console.error('[ERROR]', ...args),
   debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
 export default function Home() {
   const [transcripts, setTranscripts] = useState<any[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [initialLoad, setInitialLoad] = useState(true)
 
   useEffect(() => {
     const fetchConversation = async () => {
       try {
-        setLoading(true)
-        logger.info('Checking API connection...');
-        
-        // First check if the API is available
-        await axios.get(`${API_URL}`);
-        
-        logger.info('Fetching conversation...');
         const response = await axios.get(`${API_URL}/conversation`)
         setTranscripts(response.data)
         setError(null)
-        logger.info('Conversation loaded successfully');
       } catch (error: any) {
-        logger.error('Failed to fetch conversation:', error);
+        logger.error('Failed to fetch conversation:', error)
         if (error.code === 'ERR_NETWORK') {
-          setError("Cannot connect to server. Please make sure the backend is running at " + API_URL)
+          setError(`Cannot connect to server at ${API_URL}. Please make sure the backend is running.`)
         } else {
           setError(error.response?.data?.detail || "Failed to load conversation")
         }
       } finally {
-        setLoading(false)
+        setInitialLoad(false)
       }
     }
 
@@ -51,13 +43,13 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto p-6">
-          <h1 className="text-3xl font-light">Meeting Intelligence</h1>
+          <h1 className="text-3xl font-light">Accept All Cookies 🍪</h1>
           <p className="text-gray-500">Conversation Analysis Demo</p>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
-        {loading ? (
+        {initialLoad ? (
           <div className="text-center py-10">
             <div className="animate-pulse text-gray-600">
               Loading conversation...
@@ -73,21 +65,21 @@ export default function Home() {
                     <button
                       disabled
                       className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
-                      title="Demo Mode - Using pre-recorded conversation"
+                      title="Demo Mode - Using pre-analyzed conversation"
                     >
                       Start Recording
                     </button>
                     <button
                       disabled
                       className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
-                      title="Demo Mode - Using pre-recorded conversation"
+                      title="Demo Mode - Using pre-analyzed conversation"
                     >
                       Stop Recording
                     </button>
                   </div>
                 </div>
                 <div className="mb-4 p-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
-                  Demo Mode: Analyzing a pre-recorded conversation
+                  Demo Mode: Showing pre-analyzed conversation
                 </div>
                 <LiveTranscriptPanel transcripts={transcripts} />
               </div>

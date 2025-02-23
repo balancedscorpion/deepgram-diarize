@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import logging
-from sample_conversation import SAMPLE_CONVERSATION
-from analysis import analyze_info_density, analyze_sentiment, analyze_controversy, analyze_fallacies
+import json
+import os
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -19,6 +20,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Load the analyzed conversation once at startup
+ANALYZED_CONVERSATION = []
+try:
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    json_path = os.path.join(current_dir, "analyzed_conversation.json")
+    with open(json_path, "r") as f:
+        ANALYZED_CONVERSATION = json.load(f)
+    logger.info(f"Loaded {len(ANALYZED_CONVERSATION)} analyzed messages")
+except Exception as e:
+    logger.error(f"Error loading analyzed conversation: {e}")
+
 @app.get("/")
 async def health_check():
     """Health check endpoint"""
@@ -26,35 +38,10 @@ async def health_check():
 
 @app.get("/conversation")
 async def get_conversation():
-    """Return the sample conversation with analysis"""
-    try:
-        logger.info("Analyzing conversation...")
-        analyzed_conversation = []
-        
-        for message in SAMPLE_CONVERSATION:
-            # Analyze the message
-            info_density = analyze_info_density(message["transcript"])
-            sentiment = analyze_sentiment(message["transcript"])
-            is_controversial = analyze_controversy(message["transcript"])
-            fallacies = analyze_fallacies(message["transcript"])
-            
-            # Add analysis to the message
-            analyzed_message = {
-                **message,
-                "analysis": {
-                    "info_density": info_density,
-                    "sentiment": sentiment,
-                    "controversial": is_controversial,
-                    "fallacies": fallacies.get("fallacies", [])
-                }
-            }
-            analyzed_conversation.append(analyzed_message)
-        
-        logger.info(f"Analysis complete. Processed {len(analyzed_conversation)} messages")
-        return analyzed_conversation
-    except Exception as e:
-        logger.error(f"Error processing conversation: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    """Return the pre-analyzed conversation"""
+    if not ANALYZED_CONVERSATION:
+        raise HTTPException(status_code=500, detail="No analyzed conversation data available")
+    return ANALYZED_CONVERSATION
 
 if __name__ == "__main__":
     import uvicorn
