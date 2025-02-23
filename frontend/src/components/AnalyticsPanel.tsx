@@ -63,6 +63,15 @@ type DetailedViews = {
   [key: string]: JSX.Element;
 };
 
+// Add new interface for badges
+interface Badge {
+  title: string;
+  description: string;
+  image: string;
+  recipient: string;
+  type: string;
+}
+
 export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) {
   const [selectedChart, setSelectedChart] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -250,42 +259,105 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
     });
   }, [transcripts, visibleUpTo]);
 
+  // Update the awards calculation to be more real-time
+  const meetingAwards = useMemo(() => {
+    if (!visibleUpTo) return [];
+    
+    const badges: Badge[] = [];
+    
+    // HIPPO - Highest Paid Person's Opinion (Most Dominant)
+    const highestPaid = Object.entries(SALARY_DATA)
+      .sort(([, a], [, b]) => b - a)[0][0];
+    
+    const participationRates = costEfficiencyData.reduce((acc, curr) => {
+      acc[curr.name] = parseFloat(curr.participationRate);
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Show HIPPO badge as soon as they start dominating
+    if (participationRates[highestPaid] > 20) {
+      badges.push({
+        title: 'HIPPO Alert',
+        description: `${highestPaid} (highest paid) is dominating the conversation`,
+        image: '/badges/hippo.png',
+        recipient: highestPaid,
+        type: 'warning'
+      });
+    }
+
+    // Show ZEBRA badge when someone makes claims without evidence
+    const zebraCandidate = costEfficiencyData
+      .find(d => parseFloat(d.fallacyRate) > 30); // Lower threshold for real-time
+    if (zebraCandidate) {
+      badges.push({
+        title: 'ZEBRA Alert',
+        description: `${zebraCandidate.name} is making claims without evidence`,
+        image: '/badges/zebra.png',
+        recipient: zebraCandidate.name,
+        type: 'warning'
+      });
+    }
+
+    // Show RHINO badge for valuable contributions
+    const rhinoCandidate = costEfficiencyData
+      .find(d => parseFloat(d.valueScore) > 70 && parseFloat(d.highDensityRate) > 50);
+    if (rhinoCandidate) {
+      badges.push({
+        title: 'RHINO Star',
+        description: `${rhinoCandidate.name} is providing high-value insights`,
+        image: '/badges/rhino.png',
+        recipient: rhinoCandidate.name,
+        type: 'success'
+      });
+    }
+
+    return badges;
+  }, [visibleUpTo, costEfficiencyData, SALARY_DATA]);
+
+  // Add state to track dismissed badges
+  const [dismissedBadges, setDismissedBadges] = useState<Set<string>>(new Set());
+
   const allCharts = {
     'Sentiment Over Time': (
       <div className="h-[200px]">
         <div className="h-full flex flex-col">
-          <div className="mb-4 flex justify-center gap-4 flex-wrap">
+          <div className="mb-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs">
             {speakers.map(speaker => (
-              <div key={speaker} className="flex items-center gap-2">
+              <div key={speaker} className="flex items-center gap-1">
                 <div 
-                  className="w-3 h-3 rounded-full" 
+                  className="w-2 h-2 rounded-full" 
                   style={{ backgroundColor: SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS] }}
                 />
-                <span className="text-sm text-gray-600">{speaker}</span>
+                <span className="text-gray-600">{speaker}</span>
               </div>
             ))}
           </div>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={sentimentData}>
+            <LineChart 
+              data={sentimentData}
+              margin={{ top: 5, right: 10, left: 0, bottom: 20 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="timestamp"
                 angle={-45}
                 textAnchor="end"
-                height={60}
+                height={40}
                 interval={0}
-                tick={{ fontSize: 12 }}
+                tick={{ fontSize: 10 }}
               />
               <YAxis 
                 domain={[-1, 1]} 
                 tickFormatter={(value) => value.toFixed(1)}
+                tick={{ fontSize: 10 }}
               />
               <Tooltip 
                 contentStyle={{
                   backgroundColor: 'white',
                   borderRadius: '8px',
                   padding: '8px',
-                  border: '1px solid #e5e7eb'
+                  border: '1px solid #e5e7eb',
+                  fontSize: '12px'
                 }}
               />
               {speakers.map((speaker) => (
@@ -294,7 +366,7 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
                   type="monotone"
                   dataKey={speaker}
                   stroke={SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS]}
-                  dot={{ fill: SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS] }}
+                  dot={{ fill: SPEAKER_COLORS[speaker as keyof typeof SPEAKER_COLORS], r: 3 }}
                 />
               ))}
             </LineChart>
@@ -356,11 +428,17 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
           <BarChart 
             data={fallacyTypes}
             layout="vertical"
-            margin={{ top: 10, right: 30, left: 100, bottom: 10 }}
+            margin={{ top: 5, right: 5, left: 70, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis type="number" />
-            <YAxis dataKey="type" type="category" width={150} />
+            <YAxis 
+              dataKey="type" 
+              type="category" 
+              width={65}
+              tick={{ fontSize: 10 }}
+              tickFormatter={(value) => value.length > 12 ? `${value.slice(0, 12)}...` : value}
+            />
             <Tooltip />
             <Bar dataKey="count" fill="#8884d8" />
           </BarChart>
@@ -572,6 +650,38 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
             >
               Next
             </button>
+          </div>
+        )}
+
+        {hasData && meetingAwards.length > 0 && (
+          <div className="fixed bottom-4 right-4 space-y-2 z-40">
+            {meetingAwards
+              .filter(badge => !dismissedBadges.has(badge.title))
+              .map((badge, i) => (
+                <div 
+                  key={i}
+                  className={`flex items-center gap-3 p-3 rounded-lg shadow-lg animate-slideIn relative
+                    ${badge.type === 'warning' ? 'bg-yellow-50 border-l-4 border-yellow-400' : ''}
+                    ${badge.type === 'success' ? 'bg-green-50 border-l-4 border-green-400' : ''}
+                  `}
+                >
+                  <button
+                    onClick={() => setDismissedBadges(prev => new Set([...prev, badge.title]))}
+                    className="absolute top-1 right-1 p-1 hover:bg-black/5 rounded-full"
+                  >
+                    <XMarkIcon className="w-4 h-4 text-gray-400" />
+                  </button>
+                  <img 
+                    src={badge.image} 
+                    alt={badge.title}
+                    className="w-10 h-10"
+                  />
+                  <div>
+                    <h4 className="font-medium text-sm">{badge.title}</h4>
+                    <p className="text-xs text-gray-600 pr-4">{badge.description}</p>
+                  </div>
+                </div>
+            ))}
           </div>
         )}
       </div>

@@ -12,6 +12,7 @@ export default function DemoPage() {
   const [error, setError] = useState<string | null>(null)
   const [initialLoad, setInitialLoad] = useState(true)
   const [visibleUpTo, setVisibleUpTo] = useState(0)
+  const [isComplete, setIsComplete] = useState(false)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
@@ -82,26 +83,71 @@ export default function DemoPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div>
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl">Demo Conversation</h2>
+    <div className="space-y-6">
+      {/* Final Awards Panel - appears when demo is complete */}
+      {isComplete && (
+        <div className="bg-white rounded-2xl shadow-sm p-6 animate-slideDown">
+          <h2 className="text-xl mb-4">Meeting Awards 🎖️</h2>
+          <div className="grid grid-cols-3 gap-4 max-w-3xl mx-auto">
+            <div className="text-center p-3">
+              <img 
+                src="/badges/hippo.png"
+                alt="HIPPO Award"
+                className="w-16 h-16 mx-auto mb-2"
+              />
+              <h3 className="font-medium text-base mb-1">HIPPO Award</h3>
+              <p className="text-xs text-gray-600 mb-1">Highest Paid Person's Opinion</p>
+              <div className="text-blue-600 font-medium text-sm">Maria</div>
+            </div>
+            <div className="text-center p-3">
+              <img 
+                src="/badges/zebra.png"
+                alt="ZEBRA Award"
+                className="w-16 h-16 mx-auto mb-2"
+              />
+              <h3 className="font-medium text-base mb-1">ZEBRA Award</h3>
+              <p className="text-xs text-gray-600 mb-1">Zero Evidence but Really Arrogant</p>
+              <div className="text-blue-600 font-medium text-sm">Jamie</div>
+            </div>
+            <div className="text-center p-3">
+              <img 
+                src="/badges/rhino.png"
+                alt="RHINO Award"
+                className="w-16 h-16 mx-auto mb-2"
+              />
+              <h3 className="font-medium text-base mb-1">RHINO Award</h3>
+              <p className="text-xs text-gray-600 mb-1">Really High value, New Opportunity</p>
+              <div className="text-blue-600 font-medium text-sm">Jack</div>
+            </div>
           </div>
-          <DemoTranscriptPanel 
-            transcripts={transcripts} 
-            onVisibleIndexChange={setVisibleUpTo}
-          />
+          <div className="mt-4 text-center italic text-sm text-purple-600 bg-purple-50 p-3 rounded-lg max-w-3xl mx-auto">
+            🤖 ElevenLabs Agent suggests: &quot;Based on this meeting&apos;s analysis, consider giving Jamie a warning for making unsubstantiated claims, and maybe it&apos;s time for Lisa to explore exciting opportunities elsewhere... Just saying!&quot;
+          </div>
         </div>
-      </div>
+      )}
 
-      <div>
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="text-xl mb-6">Analytics</h2>
-          <AnalyticsPanel 
-            transcripts={transcripts} 
-            visibleUpTo={visibleUpTo}
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl">Demo Conversation</h2>
+            </div>
+            <DemoTranscriptPanel 
+              transcripts={transcripts} 
+              onVisibleIndexChange={setVisibleUpTo}
+              onComplete={setIsComplete}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-xl mb-6">Analytics</h2>
+            <AnalyticsPanel 
+              transcripts={transcripts} 
+              visibleUpTo={visibleUpTo}
+            />
+          </div>
         </div>
       </div>
     </div>

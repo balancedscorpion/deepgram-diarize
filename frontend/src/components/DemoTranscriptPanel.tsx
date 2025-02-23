@@ -30,6 +30,7 @@ interface Transcript {
 interface Props {
   transcripts: Transcript[];
   onVisibleIndexChange?: (index: number) => void;
+  onComplete?: (complete: boolean) => void;
 }
 
 interface StreamingState {
@@ -39,7 +40,8 @@ interface StreamingState {
 
 export default function DemoTranscriptPanel({ 
   transcripts: fullTranscripts,
-  onVisibleIndexChange 
+  onVisibleIndexChange,
+  onComplete
 }: Props) {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
@@ -98,7 +100,7 @@ export default function DemoTranscriptPanel({
       [timestamp]: { isStreaming: true, showTags: false }
     }));
     
-    const streamDelay = isAI ? 30 : 40;
+    const streamDelay = isAI ? 20 : 25;
     
     for (let i = 0; i <= text.length; i++) {
       if (!streamingRef.current || isPaused) {
@@ -255,6 +257,31 @@ export default function DemoTranscriptPanel({
     onVisibleIndexChange?.(0);
   };
 
+  const endDemo = () => {
+    streamingRef.current = false;
+    setIsPaused(false);
+    
+    // Show all transcripts immediately
+    const allTranscripts = fullTranscripts.map(t => ({
+      ...t,
+      transcript: t.transcript // Show full text
+    }));
+    setVisibleTranscripts(allTranscripts);
+    
+    // Show all tags
+    const finalStates = allTranscripts.reduce((acc, t) => {
+      acc[t.timestamp] = { isStreaming: false, showTags: true };
+      return acc;
+    }, {} as { [key: string]: StreamingState });
+    setStreamingStates(finalStates);
+    
+    // Set current index to end
+    setCurrentIndex(fullTranscripts.length);
+    onVisibleIndexChange?.(fullTranscripts.length);
+    setIsComplete(true);
+    onComplete?.(true);
+  };
+
   const getSpeakerColorClass = (name: string) => {
     // Get just the first name
     const firstName = name.split(' ')[0];
@@ -298,10 +325,10 @@ export default function DemoTranscriptPanel({
             <>
               {!isComplete && (
                 <button
-                  onClick={togglePause}
+                  onClick={endDemo}
                   className="px-3 py-1.5 text-sm rounded-lg font-medium bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                 >
-                  {isPaused ? 'Resume' : 'Pause'}
+                  End Demo
                 </button>
               )}
               <button
