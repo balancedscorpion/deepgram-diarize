@@ -28,11 +28,9 @@ export default function Home() {
         console.log('WebSocket connected.')
       }
       ws.onmessage = (event) => {
-        console.log('Raw WS message:', event.data)
         try {
           // e.g. { speaker: "Speaker 0", transcript: "Hello", timestamp: "..." }
           const data = JSON.parse(event.data)
-          console.log('Parsed:', data)
           setTranscripts(prev => [...prev, data])
         } catch (err) {
           console.error('Failed to parse message:', err)
