@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import NavigationButton from '@/components/NavigationButton'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,19 +26,18 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="min-h-screen bg-gray-50">
-          <header className="bg-white border-b">
-            <div className="max-w-7xl mx-auto p-6">
-              <h1 className="text-3xl font-light">Meeting Intelligence</h1>
-              <p className="text-gray-500">
-                Real-time transcription with analysis
-              </p>
+        <div className="min-h-screen bg-gray-50 p-8">
+          <div className="max-w-7xl mx-auto">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold mb-2">Meeting Intelligence</h1>
+              <div className="flex items-center gap-4">
+                <div className="text-gray-600">Real-time transcription with analysis</div>
+                <div className="text-gray-300">•</div>
+                <NavigationButton />
+              </div>
             </div>
-          </header>
-
-          <main className="max-w-7xl mx-auto p-6">
             {children}
-          </main>
+          </div>
         </div>
       </body>
     </html>

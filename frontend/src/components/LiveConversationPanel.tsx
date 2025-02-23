@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useConversation } from '@11labs/react'
 import { MicrophoneIcon, StopIcon, PlayIcon } from '@heroicons/react/24/solid'
+import Image from 'next/image'
 
 interface Props {
   onTranscriptUpdate: (transcript: string) => void;
@@ -158,6 +159,24 @@ export default function LiveConversationPanel({ onTranscriptUpdate }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex justify-center items-center gap-2 mb-2">
+        <span className="text-gray-500 text-sm">Powered by</span>
+        <a 
+          href="https://elevenlabs.io" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="hover:opacity-80 transition-opacity"
+        >
+          <Image
+            src="/elevenlabs-logo.png"
+            alt="ElevenLabs"
+            width={120}
+            height={40}
+            priority
+          />
+        </a>
+      </div>
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-2">
           <button

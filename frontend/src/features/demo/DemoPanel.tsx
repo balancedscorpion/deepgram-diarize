@@ -49,12 +49,6 @@ export default function DemoPanel({ onSwitchMode }: Props) {
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl">Demo Conversation</h2>
-            <button
-              onClick={onSwitchMode}
-              className="px-4 py-2 rounded-lg font-medium bg-purple-50 text-purple-600 hover:bg-purple-100"
-            >
-              Switch to Live Mode
-            </button>
           </div>
           <LiveTranscriptPanel transcripts={transcripts} />
         </div>

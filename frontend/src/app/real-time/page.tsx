@@ -1,9 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
-import { ConversationalAgent } from '@/components/ConversationalAgent'
 import Link from 'next/link'
 import LiveConversationPanel from '@/components/LiveConversationPanel'
 
@@ -32,26 +31,22 @@ export default function RealTimePage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div>
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl">Live Conversation</h2>
-            <Link href="/demo">Switch to Demo Mode</Link>
-          </div>
-          <LiveConversationPanel onTranscriptUpdate={handleTranscriptUpdate} />
-          <div className="mt-6">
-            <LiveTranscriptPanel transcripts={transcripts} />
+    <div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-xl mb-6">Live Conversation</h2>
+            <LiveConversationPanel onTranscriptUpdate={handleTranscriptUpdate} />
           </div>
         </div>
-      </div>
 
-      <div>
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="text-xl mb-6">Analytics</h2>
-          <AnalyticsPanel transcripts={transcripts} />
+        <div>
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="text-xl mb-6">Analytics</h2>
+            <AnalyticsPanel transcripts={transcripts} />
+          </div>
         </div>
       </div>
     </div>
-  )
+  );
 } 
