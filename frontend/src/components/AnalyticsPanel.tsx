@@ -58,6 +58,11 @@ function Modal({ isOpen, onClose, children, title }: ModalProps) {
   );
 }
 
+// Add type for detailed views
+type DetailedViews = {
+  [key: string]: JSX.Element;
+};
+
 export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) {
   const [selectedChart, setSelectedChart] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -193,36 +198,54 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
     'Lisa': 130000      // Product Owner
   };
 
-  // Calculate cost per contribution
+  // Update the cost efficiency data calculation
   const costEfficiencyData = useMemo(() => {
     const humanTranscripts = transcripts
       .filter(t => !t.isAIIntervention)
       .slice(0, visibleUpTo);
 
-    // Count messages per person
-    const messageCount: { [key: string]: number } = {};
+    // Count messages and calculate value metrics per person
+    const messageStats: { [key: string]: any } = {};
     humanTranscripts.forEach(t => {
       const name = t.name.split(' ')[0];
-      messageCount[name] = (messageCount[name] || 0) + 1;
+      if (!messageStats[name]) {
+        messageStats[name] = {
+          messageCount: 0,
+          highDensityCount: 0,
+          totalDensity: 0,
+          controversialCount: 0,
+          fallacyCount: 0
+        };
+      }
+      messageStats[name].messageCount++;
+      messageStats[name].totalDensity += t.analysis?.info_density ?? 0;
+      if (t.analysis?.info_density > 0.8) messageStats[name].highDensityCount++;
+      if (t.analysis?.controversial) messageStats[name].controversialCount++;
+      if (t.analysis?.fallacies?.length) messageStats[name].fallacyCount += t.analysis.fallacies.length;
     });
 
-    // Calculate meeting duration in hours (assume it's a 1-hour meeting for demo)
-    const MEETING_DURATION = 1;
+    return Object.entries(messageStats).map(([name, stats]) => {
+      const avgDensity = stats.totalDensity / stats.messageCount;
+      
+      // Calculate value score (0-100)
+      const valueScore = (
+        (avgDensity * 40) + // 40% weight on information density
+        (stats.highDensityCount / stats.messageCount * 30) + // 30% weight on high-value contributions
+        ((1 - stats.fallacyCount / stats.messageCount) * 20) + // 20% weight on logical reasoning
+        ((1 - stats.controversialCount / stats.messageCount) * 10) // 10% weight on non-controversial
+      ).toFixed(1);
 
-    // Calculate cost per message and participation metrics
-    return Object.entries(messageCount).map(([name, count]) => {
-      const hourlyRate = SALARY_DATA[name] / (52 * 40); // weekly hours * weeks per year
-      const meetingCost = hourlyRate * MEETING_DURATION;
-      const participationPercentage = count / humanTranscripts.length;
-      const costPerMessage = meetingCost / count;
+      // Calculate value for money (value score per $10k of salary)
+      const valueForMoney = (parseFloat(valueScore) / (SALARY_DATA[name] / 10000)).toFixed(1);
 
       return {
         name,
-        messagesPerHour: count / MEETING_DURATION,
-        costPerMessage: costPerMessage.toFixed(2),
-        participationRate: (participationPercentage * 100).toFixed(1),
-        meetingCost: meetingCost.toFixed(2),
-        messageCount: count
+        annualSalary: SALARY_DATA[name].toLocaleString(),
+        valueScore,
+        valueForMoney,
+        highDensityRate: ((stats.highDensityCount / stats.messageCount) * 100).toFixed(1),
+        fallacyRate: ((stats.fallacyCount / stats.messageCount) * 100).toFixed(1),
+        participationRate: ((stats.messageCount / humanTranscripts.length) * 100).toFixed(1)
       };
     });
   }, [transcripts, visibleUpTo]);
@@ -393,57 +416,93 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
       </div>
     ),
     'Cost Efficiency': (
-      <div className="h-[200px]">
-        <div className="h-full flex flex-col">
-          <div className="flex-grow">
-            <ResponsiveContainer width="100%" height="100%" minHeight={100}>
-              <BarChart 
-                data={costEfficiencyData} 
-                margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="name"
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis yAxisId="left" orientation="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Bar yAxisId="left" dataKey="costPerMessage" fill="#8884d8" />
-                <Bar yAxisId="right" dataKey="participationRate" fill="#82ca9d" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="h-[30%] overflow-y-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2">Participant</th>
-                  <th className="text-right py-2">Messages</th>
-                  <th className="text-right py-2">Cost/Message</th>
-                  <th className="text-right py-2">Participation</th>
-                  <th className="text-right py-2">Meeting Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {costEfficiencyData.map((data) => (
-                  <tr key={data.name} className="border-b">
-                    <td className="py-2">{data.name}</td>
-                    <td className="text-right">{data.messageCount}</td>
-                    <td className="text-right">${data.costPerMessage}</td>
-                    <td className="text-right">{data.participationRate}%</td>
-                    <td className="text-right">${data.meetingCost}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <div className="h-[180px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart 
+            data={costEfficiencyData}
+            margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="participationRate" fill="#82ca9d" name="Participation %" />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     ),
+  };
+
+  // Fix the detailed views object syntax
+  const detailedViews: DetailedViews = {
+    'Cost Efficiency': (
+      <div className="h-[600px] flex flex-col">
+        <div className="space-y-4 mb-6">
+          <p className="text-gray-600">
+            This analysis compares each participant&apos;s contribution value against their salary to determine meeting efficiency.
+          </p>
+          <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+            <h4 className="font-medium">Metrics Explained:</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li><span className="font-medium">Value Score</span> - Overall contribution quality (0-100%) based on information density, high-value inputs, and logical reasoning</li>
+              <li><span className="font-medium">Value per $10k</span> - How much value is delivered per $10,000 of salary (higher is better)</li>
+              <li><span className="font-medium">High Density %</span> - Percentage of contributions that contained significant information</li>
+              <li><span className="font-medium">Participation %</span> - Share of total meeting contributions</li>
+            </ul>
+            <p className="text-xs text-gray-500 mt-2">
+              Rows highlighted in green indicate high value for money (&gt;1.0), while red indicates potential concerns (&lt;0.5).
+            </p>
+          </div>
+        </div>
+
+        <div className="h-[250px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart 
+              data={costEfficiencyData}
+              margin={{ top: 10, right: 30, left: 0, bottom: 30 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis yAxisId="left" orientation="left" label={{ value: 'Value Score', angle: -90, position: 'insideLeft' }} />
+              <YAxis yAxisId="right" orientation="right" label={{ value: 'Value per $10k Salary', angle: 90, position: 'insideRight' }} />
+              <Tooltip />
+              <Bar yAxisId="left" dataKey="valueScore" fill="#82ca9d" name="Value Score" />
+              <Bar yAxisId="right" dataKey="valueForMoney" fill="#8884d8" name="Value per $10k" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        
+        <div className="mt-4 overflow-y-auto flex-grow">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left py-2 px-3">Participant</th>
+                <th className="text-right py-2 px-3">Annual Salary</th>
+                <th className="text-right py-2 px-3">Value Score</th>
+                <th className="text-right py-2 px-3">Value per $10k</th>
+                <th className="text-right py-2 px-3">High Density %</th>
+                <th className="text-right py-2 px-3">Participation %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {costEfficiencyData.map((data) => (
+                <tr key={data.name} className={`
+                  ${parseFloat(data.valueForMoney) < 0.5 ? 'bg-red-50' : ''}
+                  ${parseFloat(data.valueForMoney) > 1.0 ? 'bg-green-50' : ''}
+                `}>
+                  <td className="py-2 px-3">{data.name}</td>
+                  <td className="text-right py-2 px-3">${data.annualSalary}</td>
+                  <td className="text-right py-2 px-3">{data.valueScore}%</td>
+                  <td className="text-right py-2 px-3">{data.valueForMoney}</td>
+                  <td className="text-right py-2 px-3">{data.highDensityRate}%</td>
+                  <td className="text-right py-2 px-3">{data.participationRate}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
   };
 
   // Add debug logging
@@ -523,7 +582,7 @@ export default function AnalyticsPanel({ transcripts, visibleUpTo = 0 }: Props) 
         title={selectedChart || ''}
       >
         <div className="h-[600px]">
-          {selectedChart && allCharts[selectedChart]}
+          {selectedChart && (detailedViews[selectedChart as keyof typeof detailedViews] || allCharts[selectedChart])}
         </div>
       </Modal>
     </>
