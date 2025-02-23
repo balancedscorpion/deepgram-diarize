@@ -30,21 +30,37 @@ interface Props {
 }
 
 export default function DemoTranscriptPanel({ transcripts }: Props) {
-  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null)
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null)
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  const highlightFallacy = (text: string, fallacies: Fallacy[]) => {
+    let highlightedText = text;
+    fallacies.forEach(fallacy => {
+      highlightedText = highlightedText.replace(
+        fallacy.segment,
+        `<span class="bg-red-100 relative group cursor-help">
+          ${fallacy.segment}
+          <span class="invisible group-hover:visible absolute bottom-full left-0 w-64 p-2 bg-white border rounded-lg shadow-lg text-sm z-10">
+            <strong class="text-red-600">${fallacy.type}</strong><br/>
+            ${fallacy.explanation}
+          </span>
+        </span>`
+      );
+    });
+    return <div dangerouslySetInnerHTML={{ __html: highlightedText }} />;
+  };
 
   const handlePlay = async (transcript: Transcript) => {
     const messageId = transcript.messageId || transcript.timestamp;
     
-    if (playingMessageId === messageId) {
+    if (playingId === messageId) {
       audioElement?.pause();
-      setPlayingMessageId(null);
+      setPlayingId(null);
       setAudioElement(null);
       return;
     }
 
     try {
-      setPlayingMessageId(messageId);
+      setPlayingId(messageId);
       
       // First get available voices
       const voicesResponse = await fetch('https://api.elevenlabs.io/v1/voices', {
@@ -88,7 +104,7 @@ export default function DemoTranscriptPanel({ transcripts }: Props) {
       const audio = new Audio(audioUrl);
       
       audio.onended = () => {
-        setPlayingMessageId(null);
+        setPlayingId(null);
         setAudioElement(null);
         URL.revokeObjectURL(audioUrl);
       };
@@ -97,19 +113,19 @@ export default function DemoTranscriptPanel({ transcripts }: Props) {
       await audio.play();
     } catch (error) {
       console.error('Failed to play audio:', error);
-      setPlayingMessageId(null);
+      setPlayingId(null);
       setAudioElement(null);
     }
   };
 
   return (
     <div className="space-y-4 max-h-[600px] overflow-y-auto">
-      {transcripts.map((t, index) => {
+      {transcripts.map((t, i) => {
         const messageId = t.messageId || t.timestamp;
-        const isCurrentlyPlaying = playingMessageId === messageId;
+        const isCurrentlyPlaying = playingId === messageId;
 
         return (
-          <div key={index} className="space-y-1">
+          <div key={i} className="space-y-1">
             <div className="flex items-center gap-2">
               <span className={`font-medium text-${t.speaker === 'Speaker 1' ? 'blue' : t.speaker === 'Speaker 2' ? 'emerald' : t.speaker === 'Speaker 3' ? 'purple' : t.speaker === 'Speaker 4' ? 'orange' : 'yellow'}-600`}>
                 {t.name || t.speaker}
@@ -119,18 +135,18 @@ export default function DemoTranscriptPanel({ transcripts }: Props) {
               </span>
               <button
                 onClick={() => handlePlay(t)}
-                className="p-2 rounded-full hover:bg-gray-200 transition-colors"
+                className="p-1 rounded-full hover:bg-gray-200 transition-colors"
               >
                 {isCurrentlyPlaying ? (
-                  <StopIcon className="w-5 h-5 text-purple-600" />
+                  <StopIcon className="w-4 h-4 text-purple-600" />
                 ) : (
-                  <PlayIcon className="w-5 h-5 text-purple-600" />
+                  <PlayIcon className="w-4 h-4 text-purple-600" />
                 )}
               </button>
             </div>
             <div className="text-gray-600">
               {t.analysis?.fallacies?.length > 0 
-                ? <div dangerouslySetInnerHTML={{ __html: t.transcript }} />
+                ? highlightFallacy(t.transcript, t.analysis.fallacies)
                 : t.transcript
               }
             </div>

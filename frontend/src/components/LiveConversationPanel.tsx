@@ -159,7 +159,7 @@ export default function LiveConversationPanel({ onTranscriptUpdate }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-center items-center gap-2 mb-2">
+      <div className="flex justify-center items-center gap-2">
         <span className="text-gray-500 text-sm">Powered by</span>
         <a 
           href="https://elevenlabs.io" 
@@ -177,7 +177,7 @@ export default function LiveConversationPanel({ onTranscriptUpdate }: Props) {
         </a>
       </div>
 
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <button
             onClick={startConversation}

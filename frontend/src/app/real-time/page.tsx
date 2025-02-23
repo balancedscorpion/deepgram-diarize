@@ -31,20 +31,17 @@ export default function RealTimePage() {
   }
 
   return (
-    <div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div>
-          <div className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-xl mb-6">Live Conversation</h2>
-            <LiveConversationPanel onTranscriptUpdate={handleTranscriptUpdate} />
-          </div>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <LiveConversationPanel onTranscriptUpdate={handleTranscriptUpdate} />
         </div>
+      </div>
 
-        <div>
-          <div className="bg-white rounded-2xl shadow-sm p-6">
-            <h2 className="text-xl mb-6">Analytics</h2>
-            <AnalyticsPanel transcripts={transcripts} />
-          </div>
+      <div>
+        <div className="bg-white rounded-2xl shadow-sm p-6">
+          <h2 className="text-xl mb-6">Analytics</h2>
+          <AnalyticsPanel transcripts={transcripts} />
         </div>
       </div>
     </div>
