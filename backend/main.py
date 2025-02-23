@@ -1,3 +1,5 @@
+# main.py
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
@@ -10,13 +12,14 @@ import pyaudio
 from datetime import datetime
 from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 from starlette.websockets import WebSocketState
-from typing import Optional, Set
+from typing import Optional, Set, List
 
-# Set up logging
+# Import the analysis functions & model
+from analysis import TranscriptEntry, get_meeting_objective, get_speaker_sentiment
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create routers
 demo_router = APIRouter(prefix="/demo", tags=["demo"])
 realtime_router = APIRouter(prefix="/real-time", tags=["real-time"])
 
@@ -28,6 +31,9 @@ CHUNK = 1024
 RATE = 16000
 CHANNELS = 1
 FORMAT = pyaudio.paInt16
+
+# In-memory transcript storage
+TRANSCRIPT_MEMORY: List[TranscriptEntry] = []
 
 # Global state
 connected_clients: Set[WebSocket] = set()
@@ -43,14 +49,14 @@ app = FastAPI()
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","http://localhost:3001" ],
+    allow_origins=["http://localhost:3000","http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # -------------------
-# Load the demo conversation
+# Load the demo conversation (optional)
 # -------------------
 DEMO_CONVERSATION = []
 try:
@@ -64,18 +70,43 @@ except Exception as e:
 
 @demo_router.get("/conversation")
 async def get_demo_conversation():
-    """Return the pre-analyzed demo conversation"""
     if not DEMO_CONVERSATION:
         raise HTTPException(status_code=500, detail="No demo conversation data available")
     return DEMO_CONVERSATION
+
+@demo_router.get("/transcript-memory")
+async def get_transcript_memory():
+    """
+    Returns the current list of transcript entries from in-memory storage.
+    """
+    return TRANSCRIPT_MEMORY
+
+# -------------------
+# Objective Endpoint
+# -------------------
+@demo_router.get("/objective")
+async def get_objective():
+    """
+    Return the LLM's textual response for the conversation objective.
+    """
+    llm_response = get_meeting_objective(TRANSCRIPT_MEMORY)
+    return {"objective_response": llm_response}
+
+# -------------------
+# Sentiment Endpoint
+# -------------------
+@demo_router.get("/sentiment")
+async def get_sentiment():
+    """
+    Return the LLM's textual response for the per-speaker sentiment analysis.
+    """
+    sentiment_response = get_speaker_sentiment(TRANSCRIPT_MEMORY)
+    return {"sentiment_response": sentiment_response}
 
 # -------------------
 # Broadcasting Helper
 # -------------------
 async def broadcast_transcript(data: dict):
-    """
-    Sends transcript to all connected WebSocket clients as JSON text.
-    """
     payload = json.dumps(data)
     for ws in list(connected_clients):
         if ws.client_state == WebSocketState.CONNECTED:
@@ -88,35 +119,23 @@ async def broadcast_transcript(data: dict):
 # Deepgram Callback
 # -------------------
 def on_transcript(connection, result, **kwargs):
-    """
-    Called each time Deepgram returns a transcript chunk.
-    We track partial transcripts (alt.transcript) so that we only send
-    the incremental difference in real time.
-    """
     alt = result.channel.alternatives[0]
     transcript_text = alt.transcript
     if not transcript_text:
-        return  # Skip empty transcripts
+        return
 
-    # If using speaker diarization, alt.words might have speaker indices
-    # We'll pick the first word's speaker if available
+    # Identify speaker if diarization is enabled
     speaker_label = "Unknown"
     if alt.words and alt.words[0].speaker is not None:
         speaker_label = f"Speaker {alt.words[0].speaker}"
 
-    # Retrieve the last partial transcript for this speaker
     old_partial = speaker_partial.get(speaker_label, "")
-
-    # Find the common prefix between old_partial and the new partial
     i = 0
     min_len = min(len(old_partial), len(transcript_text))
     while i < min_len and old_partial[i] == transcript_text[i]:
         i += 1
-
-    # The new substring after the common prefix
     new_str = transcript_text[i:].strip()
 
-    # If there's truly something new, broadcast it
     if new_str:
         transcript_data = {
             "speaker": speaker_label,
@@ -131,22 +150,32 @@ def on_transcript(connection, result, **kwargs):
             }
         }
 
+        # --- Store new snippet ---
+        TRANSCRIPT_MEMORY.append(
+            TranscriptEntry(speaker=speaker_label, transcript=new_str)
+        )
+
+        # --- Call LLM for objective ---
+        llm_objective = get_meeting_objective(TRANSCRIPT_MEMORY)
+        logger.info(f"LLM objective response: {llm_objective}")
+
+        # --- Call LLM for sentiment ---
+        llm_sentiment = get_speaker_sentiment(TRANSCRIPT_MEMORY)
+        logger.info(f"LLM speaker sentiment response: {llm_sentiment}")
+
+        # --- Broadcast only the new transcript ---
         global loop
         if loop and loop.is_running():
             loop.call_soon_threadsafe(
                 lambda: asyncio.create_task(broadcast_transcript(transcript_data))
             )
 
-    # Update stored partial transcript for this speaker
     speaker_partial[speaker_label] = transcript_text
 
 # -------------------
 # Audio Thread
 # -------------------
 def audio_worker():
-    """
-    Audio capture and streaming to Deepgram.
-    """
     logger.info("Audio worker starting...")
 
     dg = DeepgramClient(DEEPGRAM_API_KEY)
@@ -161,7 +190,6 @@ def audio_worker():
         punctuate=True,
         interim_results=True,
         diarize=True,
-        # You can experiment with endpointing, multichannel, etc.
     )
 
     if not dg_connection.start(options):
@@ -197,13 +225,13 @@ def audio_worker():
 # -------------------
 @realtime_router.post("/start")
 async def start_recording():
-    """Start audio recording + transcription"""
-    global audio_thread, speaker_partial
+    global audio_thread, speaker_partial, TRANSCRIPT_MEMORY
     if audio_thread and audio_thread.is_alive():
         return {"message": "Already recording"}
 
-    # Clear partial transcripts from previous sessions
+    # Reset partial transcripts & store
     speaker_partial.clear()
+    TRANSCRIPT_MEMORY.clear()
 
     stop_event.clear()
     audio_thread = threading.Thread(target=audio_worker, daemon=True)
@@ -212,7 +240,6 @@ async def start_recording():
 
 @realtime_router.post("/stop")
 async def stop_recording():
-    """Stop audio recording + transcription"""
     global audio_thread
     if not audio_thread or not audio_thread.is_alive():
         return {"message": "Not currently recording"}
@@ -224,17 +251,12 @@ async def stop_recording():
 
 @realtime_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint for clients to receive real-time transcripts.
-    """
     await websocket.accept()
     connected_clients.add(websocket)
     logger.info(f"Client connected. Total clients: {len(connected_clients)}")
 
     try:
         while True:
-            # We generally don't expect incoming messages,
-            # but we must receive to keep the WS connection alive.
             await websocket.receive_text()
     except WebSocketDisconnect:
         logger.info("Client disconnected")
@@ -247,16 +269,16 @@ async def websocket_endpoint(websocket: WebSocket):
 # -------------------
 @app.get("/")
 async def health_check():
-    """Health check endpoint"""
     return {"status": "ok"}
 
-# Include routers
+# -------------------
+# Include Routers & Startup
+# -------------------
 app.include_router(demo_router)
 app.include_router(realtime_router)
 
 @app.on_event("startup")
 async def startup_event():
-    """Capture reference to the main event loop."""
     global loop
     loop = asyncio.get_running_loop()
 
