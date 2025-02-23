@@ -1,85 +1,129 @@
 import os
-from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket
-import logging
-from fastapi.middleware.cors import CORSMiddleware
-import pyaudio
+import json
 import threading
-from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 from datetime import datetime
-import uvicorn
-from typing import List
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import pyaudio
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.websockets import WebSocketState
 
-# Load environment variables from .env file
-load_dotenv()
+# Deepgram imports
+from deepgram import DeepgramClient, LiveTranscriptionEvents, LiveOptions
 
+####################################
+# Environment / Configuration
+####################################
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "YOUR_DEEPGRAM_API_KEY")
+
+# PyAudio settings
+CHUNK = 1024
+RATE = 16000
+CHANNELS = 1
+FORMAT = pyaudio.paInt16
+
+####################################
+# FastAPI Setup
+####################################
 app = FastAPI()
 
-# Allow all origins (adjust in production)
+# Enable CORS for local dev (adjust as needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In production, restrict this
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Audio parameters
-CHUNK = 1024
-FORMAT = pyaudio.paInt16
-CHANNELS = 1
-RATE = 16000
+# Track WebSocket connections
+connected_clients = set()
 
-# Global variables
-recording = False
-dg_connection = None
-active_websockets: List[WebSocket] = []
+# Thread / event for capturing audio
+stop_event = threading.Event()
+audio_thread = None
 
-# Initialize Deepgram
-DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY")
-if not DEEPGRAM_API_KEY:
-    raise EnvironmentError("Missing DEEPGRAM_API_KEY")
+####################################
+# Broadcast Helper
+####################################
+def broadcast_transcript(data: dict):
+    """
+    Sends transcript JSON to all /ws clients.
+    Since on_transcript is called from a non-async context,
+    we schedule the actual send on the main thread's event loop
+    using starlette's 'threading' approach or a standard approach.
+    However, if this causes an event-loop error, you can simply
+    iterate over connected_clients and call ws.send_text in a try/except.
+    """
+    payload = json.dumps(data)
+    for ws in list(connected_clients):
+        if ws.client_state == WebSocketState.CONNECTED:
+            try:
+                ws.send_text(payload)
+            except Exception:
+                pass  # e.g. if client closed unexpectedly
 
-deepgram = DeepgramClient(DEEPGRAM_API_KEY)
-
-async def broadcast_transcript(transcript_data: dict):
-    """Send transcript to all connected websocket clients"""
-    for websocket in active_websockets:
-        try:
-            await websocket.send_json(transcript_data)
-        except:
-            active_websockets.remove(websocket)
-
-def on_transcript(connection, result):
-    """Handle incoming transcripts"""
+####################################
+# Deepgram Transcription Callback
+####################################
+def on_transcript(connection, result, **kwargs):
     alt = result.channel.alternatives[0]
-    transcript = alt.transcript
-    if not transcript:
+    text = alt.transcript
+
+    # Skip if no text (empty partial)
+    if not text:
         return
 
-    # Get speaker info
-    words = alt.words
-    speaker_str = f"Speaker {words[0].speaker}" if words and words[0].speaker else "Unknown"
+    # Log to console
+    print("Transcript:", text)
 
-    # Create record
-    record = {
-        "speaker": speaker_str,
-        "transcript": transcript,
+    # Build transcript dict
+    transcript_data = {
+        "transcript": text,
         "timestamp": datetime.utcnow().isoformat()
     }
 
-    # Broadcast to all connected clients
-    import asyncio
-    asyncio.run(broadcast_transcript(record))
+    # Broadcast to all connected websockets
+    broadcast_transcript(transcript_data)
 
-def record_audio():
-    """Record audio from microphone and send to Deepgram"""
-    global recording, dg_connection
-    
+####################################
+# Audio Worker Thread
+####################################
+def audio_worker():
+    """
+    1. Create a Deepgram client.
+    2. Start the WebSocket connection (synchronously).
+    3. Open mic, read data, send to Deepgram.
+    4. When stop_event is set, finish and clean up.
+    """
+    print("Audio worker starting...")
+
+    # 1) Initialize the Deepgram client
+    dg = DeepgramClient(DEEPGRAM_API_KEY)
+
+    # 2) Create the WebSocket connection object
+    dg_connection = dg.listen.websocket.v("1")
+
+    # Register the callback for transcripts
+    dg_connection.on(LiveTranscriptionEvents.Transcript, on_transcript)
+
+    # Create transcription options
+    options = LiveOptions(
+        model="general-enhanced",  # or "enhanced-meeting"
+        encoding="linear16",
+        sample_rate=RATE,
+        channels=CHANNELS,
+        punctuate=True,
+        interim_results=True,  # get partial transcripts
+    )
+
+    # Start connection (returns bool, not a coroutine)
+    started = dg_connection.start(options)
+    if not started:
+        print("Failed to start Deepgram WebSocket connection.")
+        return
+
+    # 3) Open PyAudio
     p = pyaudio.PyAudio()
     stream = p.open(
         format=FORMAT,
@@ -89,71 +133,72 @@ def record_audio():
         frames_per_buffer=CHUNK
     )
 
-    while recording:
-        data = stream.read(CHUNK, exception_on_overflow=False)
-        if dg_connection:
-            dg_connection.send(data)
+    print("Recording audio. Speak into your microphone...")
 
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    active_websockets.append(websocket)
     try:
-        while True:
-            # Keep the connection alive
-            await websocket.receive_text()
-    except:
-        active_websockets.remove(websocket)
+        # Continuously read mic data until stop_event is set
+        while not stop_event.is_set():
+            data = stream.read(CHUNK, exception_on_overflow=False)
+            dg_connection.send(data)  # send is synchronous
+    except Exception as e:
+        print("Audio worker error:", e)
+    finally:
+        # 4) Finish
+        print("Finishing Deepgram connection...")
+        dg_connection.finish()
 
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        print("Audio worker stopped.")
+
+####################################
+# Start/Stop Endpoints
+####################################
 @app.post("/start")
 async def start_recording():
-    """Start recording and transcription"""
-    global recording, dg_connection
-    
-    if recording:
-        return {"message": "Already recording"}
+    global audio_thread
+    if audio_thread and audio_thread.is_alive():
+        return {"message": "Already recording."}
 
-    # Setup Deepgram connection
-    dg_connection = deepgram.listen.websocket.v("1")
-    dg_connection.on(LiveTranscriptionEvents.Transcript, on_transcript)
-
-    options = LiveOptions(
-        model="enhanced-meeting",
-        diarize=True,
-        encoding="linear16",
-        sample_rate=RATE,
-        channels=CHANNELS,
-        punctuate=True,
-    )
-
-    # Start Deepgram connection
-    if not dg_connection.start(options):
-        raise HTTPException(status_code=500, detail="Failed to start Deepgram connection")
-
-    # Start recording
-    recording = True
-    threading.Thread(target=record_audio, daemon=True).start()
-
+    stop_event.clear()
+    audio_thread = threading.Thread(target=audio_worker, daemon=True)
+    audio_thread.start()
     return {"message": "Recording started"}
 
 @app.post("/stop")
 async def stop_recording():
-    """Stop recording and transcription"""
-    global recording, dg_connection
-    
-    if not recording:
-        return {"message": "Not recording"}
+    global audio_thread
+    if not audio_thread or not audio_thread.is_alive():
+        return {"message": "Not currently recording."}
 
-    recording = False
-    if dg_connection:
-        dg_connection.finish()
-        dg_connection = None
-
+    stop_event.set()
+    audio_thread.join()
+    audio_thread = None
     return {"message": "Recording stopped"}
 
+####################################
+# WebSocket: /ws
+####################################
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    connected_clients.add(websocket)
+    print("Client connected. Total:", len(connected_clients))
+
+    try:
+        while True:
+            # Keep connection open. If you need data from client, handle it here
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        connected_clients.remove(websocket)
+        print("Client disconnected. Total:", len(connected_clients))
+
+####################################
+# Entry Point
+####################################
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import uvicorn
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
