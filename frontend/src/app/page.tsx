@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import axios from 'axios'
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
@@ -11,117 +11,96 @@ const logger = {
   debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export default function Home() {
   const [transcripts, setTranscripts] = useState<any[]>([])
-  const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const wsRef = useRef<WebSocket | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    logger.info('Initializing WebSocket connection...');
-    wsRef.current = new WebSocket('ws://localhost:8000/ws')
-    
-    wsRef.current.onopen = () => {
-      logger.info('WebSocket connection established');
-    };
-    
-    wsRef.current.onmessage = (event) => {
-      const transcript = JSON.parse(event.data)
-      logger.debug('Received transcript:', transcript);
-      setTranscripts(prev => [...prev, transcript])
+    const fetchConversation = async () => {
+      try {
+        setLoading(true)
+        logger.info('Checking API connection...');
+        
+        // First check if the API is available
+        await axios.get(`${API_URL}`);
+        
+        logger.info('Fetching conversation...');
+        const response = await axios.get(`${API_URL}/conversation`)
+        setTranscripts(response.data)
+        setError(null)
+        logger.info('Conversation loaded successfully');
+      } catch (error: any) {
+        logger.error('Failed to fetch conversation:', error);
+        if (error.code === 'ERR_NETWORK') {
+          setError("Cannot connect to server. Please make sure the backend is running at " + API_URL)
+        } else {
+          setError(error.response?.data?.detail || "Failed to load conversation")
+        }
+      } finally {
+        setLoading(false)
+      }
     }
 
-    wsRef.current.onerror = (error) => {
-      logger.error('WebSocket error:', error)
-      setError('Failed to connect to WebSocket server')
-    }
-
-    wsRef.current.onclose = () => {
-      logger.info('WebSocket connection closed');
-    };
-
-    return () => {
-      logger.info('Cleaning up WebSocket connection...');
-      wsRef.current?.close()
-    }
+    fetchConversation()
   }, [])
-
-  const handleStartRecording = async () => {
-    try {
-      logger.info('Starting recording...');
-      await axios.post('http://localhost:8000/start')
-      setIsRecording(true)
-      setError(null)
-      setTranscripts([])
-      logger.info('Recording started successfully');
-    } catch (error) {
-      logger.error('Failed to start recording:', error);
-      setError("Failed to start recording")
-    }
-  }
-
-  const handleStopRecording = async () => {
-    try {
-      logger.info('Stopping recording...');
-      await axios.post('http://localhost:8000/stop')
-      setIsRecording(false)
-      setError(null)
-      logger.info('Recording stopped successfully');
-    } catch (error) {
-      logger.error('Failed to stop recording:', error);
-      setError("Failed to stop recording")
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto p-6">
           <h1 className="text-3xl font-light">Meeting Intelligence</h1>
-          <p className="text-gray-500">Real-time transcription and analytics</p>
+          <p className="text-gray-500">Conversation Analysis Demo</p>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <div className="bg-white rounded-2xl shadow-sm p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl">Live Transcript</h2>
-                <div className="space-x-3">
-                  <button
-                    onClick={handleStartRecording}
-                    disabled={isRecording}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors
-                      ${isRecording 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
-                  >
-                    Start Recording
-                  </button>
-                  <button
-                    onClick={handleStopRecording}
-                    disabled={!isRecording}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors
-                      ${!isRecording
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                        : 'bg-red-50 text-red-600 hover:bg-red-100'}`}
-                  >
-                    Stop Recording
-                  </button>
+        {loading ? (
+          <div className="text-center py-10">
+            <div className="animate-pulse text-gray-600">
+              Loading conversation...
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl">Conversation Transcript</h2>
+                  <div className="space-x-3">
+                    <button
+                      disabled
+                      className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
+                      title="Demo Mode - Using pre-recorded conversation"
+                    >
+                      Start Recording
+                    </button>
+                    <button
+                      disabled
+                      className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-400 cursor-not-allowed"
+                      title="Demo Mode - Using pre-recorded conversation"
+                    >
+                      Stop Recording
+                    </button>
+                  </div>
                 </div>
+                <div className="mb-4 p-2 bg-blue-50 text-blue-700 rounded-lg text-sm">
+                  Demo Mode: Analyzing a pre-recorded conversation
+                </div>
+                <LiveTranscriptPanel transcripts={transcripts} />
               </div>
-              <LiveTranscriptPanel transcripts={transcripts} />
             </div>
-          </div>
 
-          <div>
-            <div className="bg-white rounded-2xl shadow-sm p-6">
-              <h2 className="text-xl mb-6">Analytics</h2>
-              <AnalyticsPanel transcripts={transcripts} />
+            <div>
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h2 className="text-xl mb-6">Analytics</h2>
+                <AnalyticsPanel transcripts={transcripts} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </main>
 
       {error && (
