@@ -49,11 +49,7 @@ audio_thread = None
 def broadcast_transcript(data: dict):
     """
     Sends transcript JSON to all /ws clients.
-    Since on_transcript is called from a non-async context,
-    we schedule the actual send on the main thread's event loop
-    using starlette's 'threading' approach or a standard approach.
-    However, if this causes an event-loop error, you can simply
-    iterate over connected_clients and call ws.send_text in a try/except.
+    If speaker diarization is present, `data` includes speaker label.
     """
     payload = json.dumps(data)
     for ws in list(connected_clients):
@@ -67,18 +63,29 @@ def broadcast_transcript(data: dict):
 # Deepgram Transcription Callback
 ####################################
 def on_transcript(connection, result, **kwargs):
+    """
+    Called each time Deepgram returns a transcript chunk.
+    If diarization is enabled, we look at the first word's speaker label.
+    """
     alt = result.channel.alternatives[0]
     text = alt.transcript
-
-    # Skip if no text (empty partial)
     if not text:
-        return
+        return  # Skip empty partials
+
+    # Determine speaker label if diarization is enabled
+    # words[0].speaker might be 0, 1, etc. or None
+    words = alt.words
+    if words and words[0].speaker is not None:
+        speaker_label = f"Speaker {words[0].speaker}"
+    else:
+        speaker_label = "Unknown"
 
     # Log to console
-    print("Transcript:", text)
+    print(f"{speaker_label}: {text}")
 
-    # Build transcript dict
+    # Build transcript dict with speaker included
     transcript_data = {
+        "speaker": speaker_label,
         "transcript": text,
         "timestamp": datetime.utcnow().isoformat()
     }
@@ -91,8 +98,8 @@ def on_transcript(connection, result, **kwargs):
 ####################################
 def audio_worker():
     """
-    1. Create a Deepgram client.
-    2. Start the WebSocket connection (synchronously).
+    1. Create a Deepgram client + set diarization options.
+    2. Start the WebSocket connection (sync).
     3. Open mic, read data, send to Deepgram.
     4. When stop_event is set, finish and clean up.
     """
@@ -107,17 +114,18 @@ def audio_worker():
     # Register the callback for transcripts
     dg_connection.on(LiveTranscriptionEvents.Transcript, on_transcript)
 
-    # Create transcription options
+    # Create transcription options with diarize=True
     options = LiveOptions(
-        model="general-enhanced",  # or "enhanced-meeting"
+        model="enhanced-meeting",  # a diarization-capable model
         encoding="linear16",
         sample_rate=RATE,
         channels=CHANNELS,
         punctuate=True,
-        interim_results=True,  # get partial transcripts
+        interim_results=True,  # partial transcripts
+        diarize=True,          # turn on speaker diarization
     )
 
-    # Start connection (returns bool, not a coroutine)
+    # Start connection (returns bool)
     started = dg_connection.start(options)
     if not started:
         print("Failed to start Deepgram WebSocket connection.")
@@ -133,13 +141,13 @@ def audio_worker():
         frames_per_buffer=CHUNK
     )
 
-    print("Recording audio. Speak into your microphone...")
+    print("Recording audio with diarization. Speak into your microphone...")
 
     try:
         # Continuously read mic data until stop_event is set
         while not stop_event.is_set():
             data = stream.read(CHUNK, exception_on_overflow=False)
-            dg_connection.send(data)  # send is synchronous
+            dg_connection.send(data)
     except Exception as e:
         print("Audio worker error:", e)
     finally:
@@ -188,8 +196,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            # Keep connection open. If you need data from client, handle it here
-            await websocket.receive_text()
+            await websocket.receive_text()  # keep open
     except WebSocketDisconnect:
         pass
     finally:

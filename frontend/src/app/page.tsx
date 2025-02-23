@@ -2,8 +2,6 @@
 
 import { useState, useRef } from 'react'
 import axios from 'axios'
-
-// Replace these with your own components or placeholders
 import LiveTranscriptPanel from '@/components/LiveTranscriptPanel'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
 
@@ -12,56 +10,42 @@ export default function Home() {
   const [isRecording, setIsRecording] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Store the WebSocket instance so we can close it later
+  // We'll store the WebSocket instance here
   const wsRef = useRef<WebSocket | null>(null)
 
-  // Adjust to match your backend
+  // Adjust these URLs to match your local server
   const wsUrl = 'ws://localhost:8000/ws'
-  const startUrl = 'http://localhost:8000/start'
-  const stopUrl = 'http://localhost:8000/stop'
+  const apiBase = 'http://localhost:8000'  // for /start, /stop endpoints
 
-  /**
-   * Creates a new WebSocket connection and configures event handlers.
-   */
   const openWebSocket = () => {
-    // If there's an existing WS, close it before opening a new one
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
-
     try {
       const ws = new WebSocket(wsUrl)
-
       ws.onopen = () => {
         console.log('WebSocket connected.')
       }
-
       ws.onmessage = (event) => {
-        // Debug: log the raw message
         console.log('Raw WS message:', event.data)
         try {
-          // Parse the JSON payload, e.g. { transcript: "...", timestamp: "..." }
-          const transcriptData = JSON.parse(event.data)
-          console.log('Parsed transcriptData:', transcriptData)
-
-          // Append this transcript chunk to our state array
-          setTranscripts(prev => [...prev, transcriptData])
-        } catch (parseErr) {
-          console.error('Failed to parse WebSocket message:', parseErr)
+          // e.g. { speaker: "Speaker 0", transcript: "Hello", timestamp: "..." }
+          const data = JSON.parse(event.data)
+          console.log('Parsed:', data)
+          setTranscripts(prev => [...prev, data])
+        } catch (err) {
+          console.error('Failed to parse message:', err)
         }
       }
-
-      ws.onerror = (evt) => {
-        console.error('WebSocket error:', evt)
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
         setError('Failed to connect to WebSocket server')
       }
-
       ws.onclose = () => {
         console.log('WebSocket closed.')
       }
 
-      // Store the WebSocket in a ref
       wsRef.current = ws
     } catch (err) {
       console.error('Error creating WebSocket:', err)
@@ -69,22 +53,16 @@ export default function Home() {
     }
   }
 
-  /**
-   * Handle "Start Recording"
-   * 1) Clears transcripts, error
-   * 2) Opens the WebSocket
-   * 3) Calls /start on the backend
-   */
   const handleStartRecording = async () => {
     setTranscripts([])
     setError(null)
 
-    // Open the WS for receiving transcripts
+    // 1) Connect to the WebSocket
     openWebSocket()
 
-    // Call the backend to begin capturing audio
+    // 2) Call /start
     try {
-      await axios.post(startUrl)
+      await axios.post(`${apiBase}/start`)
       setIsRecording(true)
     } catch (err) {
       console.error('Failed to start recording:', err)
@@ -92,25 +70,19 @@ export default function Home() {
     }
   }
 
-  /**
-   * Handle "Stop Recording"
-   * 1) Tells backend to stop
-   * 2) Closes WebSocket
-   * 3) Updates UI
-   */
   const handleStopRecording = async () => {
+    // Tell server to stop
     try {
-      await axios.post(stopUrl)
+      await axios.post(`${apiBase}/stop`)
     } catch (err) {
       console.error('Failed to stop recording:', err)
       setError('Failed to stop recording')
     }
-
+    // Close WebSocket
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
-
     setIsRecording(false)
   }
 
@@ -119,13 +91,13 @@ export default function Home() {
       <header className="bg-white border-b">
         <div className="max-w-7xl mx-auto p-6">
           <h1 className="text-3xl font-light">Meeting Intelligence</h1>
-          <p className="text-gray-500">Real-time transcription and analytics</p>
+          <p className="text-gray-500">Real-time transcription with speaker diarization</p>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left column: Live Transcript Panel */}
+          {/* Live Transcript Panel */}
           <div>
             <div className="bg-white rounded-2xl shadow-sm p-6">
               <div className="flex justify-between items-center mb-6">
@@ -135,7 +107,7 @@ export default function Home() {
                     onClick={handleStartRecording}
                     disabled={isRecording}
                     className={`px-4 py-2 rounded-lg font-medium transition-colors
-                      ${isRecording
+                      ${isRecording 
                         ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                         : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
                   >
@@ -153,11 +125,12 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+
               <LiveTranscriptPanel transcripts={transcripts} />
             </div>
           </div>
 
-          {/* Right column: Analytics Panel */}
+          {/* Analytics */}
           <div>
             <div className="bg-white rounded-2xl shadow-sm p-6">
               <h2 className="text-xl mb-6">Analytics</h2>
@@ -167,7 +140,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Error notification */}
       {error && (
         <div className="fixed bottom-4 right-4 bg-red-100 text-red-700 p-4 rounded-lg shadow-lg">
           {error}
