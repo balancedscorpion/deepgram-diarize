@@ -63,7 +63,8 @@ def on_transcript(connection, result):
 
     # Get speaker info
     words = alt.words
-    speaker_str = f"Speaker {words[0].speaker}" if words and words[0].speaker else "Unknown"
+    # Default to "Speaker 1" instead of "Unknown"
+    speaker_str = f"Speaker {words[0].speaker}" if words and words[0].speaker else "Speaker 1"
 
     # Create record
     record = {
